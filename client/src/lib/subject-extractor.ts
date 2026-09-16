@@ -12,6 +12,8 @@
  * 8. Layer Separation: Exports the extracted subject as an independent transparent layer.
  */
 
+// Server-backed Neural Background Removal (IS-Net via ONNX Runtime C++ backend)
+
 export interface SubjectExtractionOptions {
   tolerance?: number;         // 10 to 80 (default 32)
   edgeFeather?: number;       // 0 to 10 px (default 3)
@@ -19,6 +21,8 @@ export interface SubjectExtractionOptions {
   protectCenter?: boolean;    // default true
   preserveHoles?: boolean;    // default true
   contrastBoost?: number;     // 1 to 2
+  forceEngine?: "ai" | "algorithmic";
+  onProgress?: (message: string, percent: number) => void;
 }
 
 export interface ExtractionResult {
@@ -402,9 +406,9 @@ export function extractSubjectImageData(
 }
 
 /**
- * High-Level: Extract subject directly from an HTMLCanvasElement
+ * Algorithmic Fallback: Extract subject directly from an HTMLCanvasElement using local computer vision
  */
-export function extractSubjectFromCanvas(
+export function extractSubjectAlgorithmic(
   canvas: HTMLCanvasElement,
   options: SubjectExtractionOptions = {}
 ): ExtractionResult {
@@ -432,6 +436,153 @@ export function extractSubjectFromCanvas(
     foregroundPixelsCount: foregroundCount,
     backgroundPixelsCount: backgroundCount
   };
+}
+
+/**
+ * AI Deep Learning Engine (IS-Net Neural Segmentation):
+ * Executes via server-backed ONNX native neural engine.
+ * Immune to browser SharedArrayBuffer/WASM sandbox constraints.
+ * Produces pixel-perfect transparent cutouts for professional portraits, architecture, and complex scenes.
+ */
+export async function extractSubjectWithAI(
+  canvas: HTMLCanvasElement,
+  options: SubjectExtractionOptions = {}
+): Promise<ExtractionResult> {
+  const W = canvas.width;
+  const H = canvas.height;
+
+  if (options.onProgress) {
+    options.onProgress("تجهيز الصورة وإرسالها لمحرك الذكاء الاصطناعي العصبي...", 20);
+  }
+
+  // Convert canvas to image source
+  const inputDataUrl = canvas.toDataURL("image/png");
+
+  if (options.onProgress) {
+    options.onProgress("تحليل الصورة وفصل الجسم بنموذج الشبكة العصبية (IS-Net)...", 50);
+  }
+
+  const response = await fetch("/api/remove-background", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      image: inputDataUrl,
+      roi: options.roi || null,
+      model: "small"
+    })
+  });
+
+  if (!response.ok) {
+    let errorDetail = "";
+    try {
+      const errJson = await response.json();
+      errorDetail = errJson.error || "";
+    } catch {
+      errorDetail = await response.text().catch(() => "");
+    }
+    throw new Error(errorDetail || `خطأ في خادم الذكاء الاصطناعي (${response.status})`);
+  }
+
+  const resultData = await response.json();
+  if (!resultData.success || !resultData.dataUrl) {
+    throw new Error(resultData.error || "فشل محرك الذكاء الاصطناعي في استخراج الجسم");
+  }
+
+  if (options.onProgress) {
+    options.onProgress("صقل الحواف وتجهيز طبقة الشفافية PNG...", 90);
+  }
+
+  const resultDataUrl: string = resultData.dataUrl;
+
+  // Calculate accurate subject bounds & foreground/background pixel counts from the result
+  return new Promise<ExtractionResult>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const offscreen = document.createElement("canvas");
+      offscreen.width = W;
+      offscreen.height = H;
+      const offCtx = offscreen.getContext("2d");
+      if (!offCtx) {
+        return resolve({
+          dataUrl: resultDataUrl,
+          width: W,
+          height: H,
+          subjectBounds: { minX: 0, minY: 0, maxX: W, maxY: H },
+          foregroundPixelsCount: W * H * 0.5,
+          backgroundPixelsCount: W * H * 0.5
+        });
+      }
+
+      offCtx.drawImage(img, 0, 0, W, H);
+      const imgData = offCtx.getImageData(0, 0, W, H);
+      const data = imgData.data;
+
+      let minX = W, minY = H, maxX = 0, maxY = 0;
+      let fgCount = 0, bgCount = 0;
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const alpha = data[(y * W + x) * 4 + 3];
+          if (alpha > 20) {
+            fgCount++;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          } else {
+            bgCount++;
+          }
+        }
+      }
+
+      if (fgCount === 0) {
+        minX = 0; minY = 0; maxX = W; maxY = H;
+      }
+
+      resolve({
+        dataUrl: resultDataUrl,
+        width: W,
+        height: H,
+        subjectBounds: { minX, minY, maxX, maxY },
+        foregroundPixelsCount: fgCount,
+        backgroundPixelsCount: bgCount
+      });
+    };
+
+    img.onerror = () => {
+      resolve({
+        dataUrl: resultDataUrl,
+        width: W,
+        height: H,
+        subjectBounds: { minX: 0, minY: 0, maxX: W, maxY: H },
+        foregroundPixelsCount: W * H * 0.5,
+        backgroundPixelsCount: W * H * 0.5
+      });
+    };
+
+    img.src = resultDataUrl;
+  });
+}
+
+/**
+ * Unified High-Level Subject Extractor:
+ * Uses Deep Learning AI by default for professional quality on all real-world photos.
+ * Does NOT silently degrade to naive flood fill if AI fails; throws clear actionable errors.
+ */
+export async function extractSubjectFromCanvas(
+  canvas: HTMLCanvasElement,
+  options: SubjectExtractionOptions = {}
+): Promise<ExtractionResult> {
+  if (options.forceEngine === "algorithmic") {
+    return extractSubjectAlgorithmic(canvas, options);
+  }
+
+  if (options.onProgress) options.onProgress("بدء تحليل الصورة بالذكاء الاصطناعي العصبي...", 15);
+  const aiResult = await extractSubjectWithAI(canvas, options);
+  if (options.onProgress) options.onProgress("تم عزل الجسم بالذكاء الاصطناعي بنجاح!", 100);
+  return aiResult;
 }
 
 /**

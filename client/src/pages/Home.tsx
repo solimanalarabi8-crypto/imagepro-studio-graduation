@@ -963,6 +963,7 @@ export default function Home() {
     }
     const objectUrl = URL.createObjectURL(file);
     setImageSrc(objectUrl);
+    setExtractedSubjectUrl(null);
     setImageName(file.name.replace(/\.[^/.]+$/, ""));
     setStatus(`تم فتح الصورة: ${file.name} بنجاح`);
   };
@@ -982,6 +983,7 @@ export default function Home() {
     }
     const dataUrl = tempCanvas.toDataURL("image/png");
     setImageSrc(dataUrl);
+    setExtractedSubjectUrl(null);
     setImageName(name.trim() || "مشروع جديد");
     setImageSize({ width, height });
     setBrightness(0);
@@ -1012,6 +1014,7 @@ export default function Home() {
   const loadSampleImage = (key: keyof typeof sampleImages) => {
     setSampleImageKey(key);
     setImageSrc(sampleImages[key]);
+    setExtractedSubjectUrl(null);
     const names: Record<keyof typeof sampleImages, string> = {
       portrait: "دراسة بورتريه شخصي",
       landscape: "دراسة منظر طبيعي",
@@ -1452,16 +1455,23 @@ export default function Home() {
   const handleApplyBackgroundRemoval = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
-    saveAiOriginalSnapshot("عزل وتحرير الجسم من الخلفية");
+    saveAiOriginalSnapshot("عزل وتحرير الجسم بالذكاء الاصطناعي (AI Cutout)");
     const t0 = performance.now();
-    setStatus("⏳ جاري تحليل وفصل الجسم المطلوب عن الخلفية...");
+    setAiProcessing(true);
+    setAiTask("تحليل الصورة وعزل الجسم بنموذج الذكاء الاصطناعي...");
+    setAiProgress(10);
+    setStatus("⏳ جاري تحليل وفصل الجسم المطلوب بالذكاء الاصطناعي بدقة متناهية...");
 
     try {
-      // 1. Run local high-precision subject extraction
-      const result = extractSubjectFromCanvas(canvas, {
+      const result = await extractSubjectFromCanvas(canvas, {
         tolerance: bgRemoveTolerance,
         edgeFeather: bgFeather,
-        roi: selection
+        roi: selection,
+        onProgress: (msg, pct) => {
+          setAiTask(msg);
+          setAiProgress(pct);
+          setStatus(`⏳ ${msg} (${pct}%)`);
+        }
       });
 
       // Cache extracted subject for instant portrait bokeh / replacement
@@ -1470,11 +1480,15 @@ export default function Home() {
 
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       const isRoi = selection && selection.width > 5;
-      const modeStr = isRoi ? "منطقة التحديد المحددة" : "الكشف التلقائي للجسم";
-      setStatus(`✅ [${elapsed}ث] تم عزل وتحرير الجسم بنجاح (${modeStr}) — الخلفية شفافة تماماً وجاهزة للتصدير PNG`);
+      const modeStr = isRoi ? "منطقة التحديد المحددة" : "عزل الذكاء الاصطناعي العصبي (Neural IS-Net)";
+      setStatus(`✅ [${elapsed}ث] تم عزل وتحرير الجسم بنجاح (${modeStr}) — الخلفية مفرغة تماماً بصيغة PNG احترافية`);
     } catch (err) {
       console.error("Subject extraction error:", err);
-      setStatus("❌ تعذر عزل الجسم — يرجى تجربة ضبط حساسية الكشف أو تحديد العنصر بمربع التحديد");
+      setStatus("❌ تعذر عزل الجسم: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
     }
   };
 
@@ -1482,18 +1496,26 @@ export default function Home() {
    * 2. تحرير الجسم ونقله إلى طبقة مستقلة جديدة (Extract Subject to New Layer)
    * الميزة الاحترافية لبرامج التصميم الرائدة: فصل العنصر إلى طبقة جديدة مع الاحتفاظ بالخلفية
    */
-  const handleExtractSubjectToNewLayer = () => {
+  const handleExtractSubjectToNewLayer = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
-    saveAiOriginalSnapshot("تحرير الجسم ونقله لطبقة جديدة");
+    saveAiOriginalSnapshot("فصل الجسم ونقله لطبقة جديدة بالذكاء الاصطناعي");
     const t0 = performance.now();
-    setStatus("⏳ جاري تحرير الجسم ونقله إلى طبقة مستقلة...");
+    setAiProcessing(true);
+    setAiTask("فصل الجسم بالذكاء الاصطناعي ونقله لطبقة مستقلة...");
+    setAiProgress(15);
+    setStatus("⏳ جاري فصل الجسم بالذكاء الاصطناعي ونقله إلى طبقة مستقلة...");
 
     try {
-      const result = extractSubjectFromCanvas(canvas, {
+      const result = await extractSubjectFromCanvas(canvas, {
         tolerance: bgRemoveTolerance,
         edgeFeather: bgFeather,
-        roi: selection
+        roi: selection,
+        onProgress: (msg, pct) => {
+          setAiTask(msg);
+          setAiProgress(pct);
+          setStatus(`⏳ ${msg} (${pct}%)`);
+        }
       });
 
       setExtractedSubjectUrl(result.dataUrl);
@@ -1503,7 +1525,7 @@ export default function Home() {
       const freedLayerCount = layers.filter(l => l.name.includes("مفرّغ") || l.name.includes("جسم")).length + 1;
       const newLayer: LayerInfo = {
         id: subjectLayerId,
-        name: `عنصر مفرّغ ${freedLayerCount}`,
+        name: `عنصر مفرّغ بالذكاء الاصطناعي ${freedLayerCount}`,
         kind: "paint",
         color: "#2dd4bf",
         visible: true,
@@ -1516,44 +1538,63 @@ export default function Home() {
       setSelectedLayer(subjectLayerId);
 
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-      setStatus(`✨ [${elapsed}ث] تم تحرير الجسم ونقله إلى طبقة مستقلة جديدة ("${newLayer.name}") — يمكنك الآن تحريكه وإخفاء أو تغيير خلفيته بشكل منفصل!`);
+      setStatus(`✨ [${elapsed}ث] تم فصل الجسم بالذكاء الاصطناعي ونقله إلى طبقة مستقلة جديدة ("${newLayer.name}") — يمكنك تحريكه وتعديل الخلفية بحرية!`);
     } catch (err) {
       setStatus("❌ تعذر تحرير الجسم إلى طبقة جديدة: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
     }
   };
 
   /**
    * 3. تمويه الخلفية بتدرج حقيقي (True Portrait Mode / Bokeh)
-   * تمويه الخلفية مع الحفاظ على وضوح وحدة الجسم المعزول بنسبة 100%
+   * عزل الجسم بالذكاء الاصطناعي وتمويه الخلفية مع الحفاظ على وضوح وحدة الجسم المعزول بنسبة 100%
    */
   const handleBlurBackground = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
-    saveAiOriginalSnapshot("تمويه الخلفية بتدرج (Portrait Bokeh)");
+    saveAiOriginalSnapshot("تمويه الخلفية بتدرج احترافي (Portrait Bokeh)");
     const t0 = performance.now();
-    setStatus("⏳ جاري عزل الجسم وتطبيق تمويه البورتريه...");
+    setAiProcessing(true);
+    setAiTask("عزل البورتريه بالذكاء الاصطناعي وتطبيق تمويه العدسة...");
+    setAiProgress(15);
+    setStatus("⏳ جاري عزل الشخص/العنصر بالذكاء الاصطناعي وتطبيق تمويه البورتريه الاحترافي...");
 
     try {
       // Step 1: Ensure we have the clean extracted subject
       let subjectUrl = extractedSubjectUrl;
       if (!subjectUrl) {
-        const result = extractSubjectFromCanvas(canvas, {
+        const result = await extractSubjectFromCanvas(canvas, {
           tolerance: bgRemoveTolerance,
           edgeFeather: bgFeather,
-          roi: selection
+          roi: selection,
+          onProgress: (msg, pct) => {
+            setAiTask(msg);
+            setAiProgress(pct);
+            setStatus(`⏳ ${msg} (${pct}%)`);
+          }
         });
         subjectUrl = result.dataUrl;
         setExtractedSubjectUrl(subjectUrl);
       }
+
+      setAiTask("تطبيق عمق الميدان وتمويه البورتريه السينمائي (Bokeh)...");
+      setAiProgress(85);
 
       // Step 2: Composite sharp subject on top of blurred background
       const bokehResult = await createPortraitBokeh(canvas, subjectUrl, bgBlurRadius, 0.45);
       setImageSrc(bokehResult);
 
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-      setStatus(`🌫️ [${elapsed}ث] تم تطبيق تمويه البورتريه (Bokeh Effect) بنجاح — الجسم حاد بنسبة 100% والخلفية مموهة بعمق ميدان واقعي`);
+      setStatus(`🌫️ [${elapsed}ث] تم تطبيق تمويه البورتريه (Portrait Bokeh) بنجاح — الجسم حاد بنسبة 100% والخلفية مموهة بعمق ميدان واقعي (Radius: ${bgBlurRadius}px)`);
     } catch (err) {
       setStatus(`❌ تعذر تمويه الخلفية: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
     }
   };
 
@@ -1566,15 +1607,22 @@ export default function Home() {
     if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
     saveAiOriginalSnapshot(`استبدال الخلفية (${style})`);
     const t0 = performance.now();
-    setStatus("⏳ جاري استبدال الخلفية...");
+    setAiProcessing(true);
+    setAiTask("عزل الجسم واستبدال الخلفية...");
+    setAiProgress(20);
+    setStatus("⏳ جاري عزل الجسم بالذكاء الاصطناعي واستبدال الخلفية...");
 
     try {
       let subjectUrl = extractedSubjectUrl;
       if (!subjectUrl) {
-        const result = extractSubjectFromCanvas(canvas, {
+        const result = await extractSubjectFromCanvas(canvas, {
           tolerance: bgRemoveTolerance,
           edgeFeather: bgFeather,
-          roi: selection
+          roi: selection,
+          onProgress: (msg, pct) => {
+            setAiTask(msg);
+            setAiProgress(pct);
+          }
         });
         subjectUrl = result.dataUrl;
         setExtractedSubjectUrl(subjectUrl);
@@ -1587,9 +1635,13 @@ export default function Home() {
 
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       const styleAr = style === "transparent" ? "شفاف" : style === "black" ? "أسود استوديو" : style === "white" ? "أبيض نقي" : style === "studio-dark" ? "تدرج سينمائي" : "كروما خضراء";
-      setStatus(`✅ [${elapsed}ث] تم استبدال الخلفية بنجاح إلى [${styleAr}] مع الحفاظ على حدة وتفاصيل الجسم`);
+      setStatus(`✅ [${elapsed}ث] تم استبدال الخلفية بنجاح إلى [${styleAr}] مع الحفاظ التام على حدة وتفاصيل الجسم`);
     } catch (err) {
       setStatus(`❌ تعذر استبدال الخلفية: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
     }
   };
 
@@ -3913,21 +3965,40 @@ export default function Home() {
                     <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(45,212,191,0.25)", borderRadius: "8px", padding: "10px", marginBottom: "12px" }}>
                       <div style={{ fontSize: "11px", fontWeight: 700, color: "#2dd4bf", marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                          <WandSparkles size={13} /> عزل الأجسام وتأثيرات الخلفية
+                          <WandSparkles size={13} /> عزل الأجسام وتأثيرات الخلفية (AI Cutout & Bokeh)
                         </span>
-                        <span style={{ fontSize: "8px", background: "rgba(45,212,191,0.15)", border: "1px solid rgba(45,212,191,0.3)", borderRadius: "4px", color: "#2dd4bf", padding: "1px 5px" }}>
-                          PRO CUTOUT
+                        <span style={{ fontSize: "8px", background: "rgba(45,212,191,0.18)", border: "1px solid rgba(45,212,191,0.4)", borderRadius: "4px", color: "#5eead4", padding: "1px 6px", fontWeight: 700 }}>
+                          ⚡ NEURAL IS-NET
                         </span>
                       </div>
 
+                      {/* Engine Status Banner */}
+                      <div style={{ fontSize: "9px", color: "#a8c4be", marginBottom: "8px", background: "rgba(45,212,191,0.06)", border: "1px solid rgba(45,212,191,0.2)", padding: "6px 8px", borderRadius: "5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "12px" }}>🤖</span>
+                        <span><strong>محرك الذكاء الاصطناعي العصبي مفعّل:</strong> عزل دقيق لأدق خصلات الشعر والملابس والبورتريه بدون أي تشويه.</span>
+                      </div>
+
+                      {/* Active AI Progress Bar */}
+                      {aiProcessing && (
+                        <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.1)", border: "1px solid rgba(45,212,191,0.35)", borderRadius: "6px", padding: "8px 10px" }}>
+                          <div style={{ fontSize: "10px", color: "#2dd4bf", marginBottom: "4px", display: "flex", justifyContent: "space-between" }}>
+                            <span>⚙️ {aiTask || "جاري المعالجة بالذكاء الاصطناعي..."}</span>
+                            <span>{aiProgress}%</span>
+                          </div>
+                          <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "3px", height: "5px", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${aiProgress}%`, background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #3b82f6)", borderRadius: "3px", transition: "width 0.25s ease" }} />
+                          </div>
+                        </div>
+                      )}
+
                       {/* Sliders */}
-                      <Adjustment label="حساسية عزل الجسم (Tolerance)" value={bgRemoveTolerance} min={10} max={70} defaultValue={30} onChange={setBgRemoveTolerance} />
+                      <Adjustment label="قوة تمويه الخلفية (Bokeh Radius)" value={bgBlurRadius} min={5} max={50} defaultValue={20} onChange={setBgBlurRadius} />
                       <Adjustment label="تنعيم وصقل الحواف (Edge Feather)" value={bgFeather} min={0} max={8} defaultValue={3} onChange={setBgFeather} />
-                      <Adjustment label="قوة تمويه الخلفية (Bokeh Radius)" value={bgBlurRadius} min={5} max={40} defaultValue={20} onChange={setBgBlurRadius} />
+                      <Adjustment label="حساسية العزل الإضافية (Tolerance)" value={bgRemoveTolerance} min={10} max={70} defaultValue={30} onChange={setBgRemoveTolerance} />
 
                       {/* Smart Hint */}
-                      <div style={{ fontSize: "9px", color: "#6a8c85", margin: "6px 0 10px 0", background: "rgba(45,212,191,0.05)", padding: "5px 8px", borderRadius: "5px", border: "1px dashed rgba(45,212,191,0.2)" }}>
-                        💡 <strong>نصيحة:</strong> يمكنك رسم مربع بأداة التحديد أولاً حول الشخص أو العنصر لعزله بدقة متناهية (Object Selection)، أو النقر مباشرة للعزل الذكي التلقائي.
+                      <div style={{ fontSize: "9px", color: "#6a8c85", margin: "6px 0 10px 0", background: "rgba(45,212,191,0.03)", padding: "5px 8px", borderRadius: "5px", border: "1px dashed rgba(45,212,191,0.2)" }}>
+                        💡 <strong>طريقة العمل:</strong> انقر مباشرة على أي زر أدناه لمعالجة الصورة كاملة بالذكاء الاصطناعي، أو حدد جزءاً بأداة التحديد (V) لعزل منطقة معينة فقط.
                       </div>
 
                       {/* Primary Feature: تحرير الجسم إلى طبقة جديدة */}
@@ -3936,17 +4007,20 @@ export default function Home() {
                           type="button"
                           className="retouch-action-submit-btn"
                           onClick={handleExtractSubjectToNewLayer}
+                          disabled={aiProcessing}
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(45,212,191,0.2), rgba(6,182,212,0.15))",
-                            border: "1px solid rgba(45,212,191,0.45)",
+                            background: "linear-gradient(135deg, rgba(45,212,191,0.25), rgba(6,182,212,0.2))",
+                            border: "1px solid rgba(45,212,191,0.5)",
                             fontWeight: 700,
                             color: "#5eead4",
                             padding: "8px 10px",
-                            boxShadow: "0 2px 8px rgba(45,212,191,0.1)"
+                            boxShadow: "0 2px 8px rgba(45,212,191,0.12)",
+                            opacity: aiProcessing ? 0.6 : 1,
+                            cursor: aiProcessing ? "wait" : "pointer"
                           }}
-                          title="تحرير الجسم الشيء المطلوب وفصله إلى طبقة جديدة مستقلة في لوحة الطبقات"
+                          title="تحرير وفصل الجسم بالذكاء الاصطناعي ونقله إلى طبقة مستقلة في لوحة الطبقات"
                         >
                           <Sparkles size={14} /> ✨ تحرير الجسم إلى طبقة جديدة (Extract Subject)
                         </button>
@@ -3958,10 +4032,19 @@ export default function Home() {
                           type="button"
                           className="retouch-action-submit-btn"
                           onClick={handleApplyBackgroundRemoval}
-                          style={{ width: "100%", justifyContent: "center", background: "rgba(45,212,191,0.1)", border: "1px solid rgba(45,212,191,0.3)" }}
-                          title="عزل الجسم وجعل الخلفية شفافة تماماً لحفظها كصورة PNG مفرغة"
+                          disabled={aiProcessing}
+                          style={{
+                            width: "100%",
+                            justifyContent: "center",
+                            background: "rgba(45,212,191,0.12)",
+                            border: "1px solid rgba(45,212,191,0.35)",
+                            fontWeight: 600,
+                            opacity: aiProcessing ? 0.6 : 1,
+                            cursor: aiProcessing ? "wait" : "pointer"
+                          }}
+                          title="عزل الجسم بالذكاء الاصطناعي وجعل الخلفية شفافة تماماً PNG"
                         >
-                          <Crop size={13} /> ✂️ إزالة الخلفية بالكامل → شفاف (PNG)
+                          <Crop size={13} /> ✂️ إزالة الخلفية بالذكاء الاصطناعي → شفاف (PNG)
                         </button>
                       </div>
 
@@ -3971,31 +4054,44 @@ export default function Home() {
                           type="button"
                           className="retouch-action-submit-btn"
                           onClick={handleBlurBackground}
-                          style={{ width: "100%", justifyContent: "center", background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.35)", color: "#a5b4fc" }}
-                          title="تمويه خلفية الصورة بعمق ميدان واقعي (Portrait Mode Bokeh) مع بقاء الجسم حاداً 100%"
+                          disabled={aiProcessing}
+                          style={{
+                            width: "100%",
+                            justifyContent: "center",
+                            background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15))",
+                            border: "1px solid rgba(99,102,241,0.45)",
+                            color: "#c7d2fe",
+                            fontWeight: 600,
+                            opacity: aiProcessing ? 0.6 : 1,
+                            cursor: aiProcessing ? "wait" : "pointer"
+                          }}
+                          title="تمويه خلفية الصورة بعمق ميدان واقعي (Portrait Bokeh) مع بقاء الجسم حاداً 100%"
                         >
-                          <SlidersHorizontal size={13} /> 🌫️ تمويه البورتريه بتدرج (Portrait Bokeh)
+                          <SlidersHorizontal size={13} /> 🌫️ تمويه البورتريه الاحترافي (Portrait Bokeh)
                         </button>
                       </div>
 
                       {/* 3. استبدال الخلفية بألوان وتدرجات استوديو */}
                       <div>
-                        <div style={{ fontSize: "10px", color: "#a8c4be", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم المفرغ:</div>
+                        <div style={{ fontSize: "10px", color: "#a8c4be", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم المفرغ بالذكاء الاصطناعي:</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "4px" }}>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("transparent")}
+                            disabled={aiProcessing}
                             style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.15)" }}
                             title="خلفية شفافة">
                             ◻️ شفاف
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("black")}
+                            disabled={aiProcessing}
                             style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.15)" }}
                             title="أسود استوديو فخم">
                             ⬛ أسود
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("white")}
+                            disabled={aiProcessing}
                             style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}
                             title="أبيض نقي تجاري">
                             ⬜ أبيض
@@ -4004,12 +4100,14 @@ export default function Home() {
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("studio-dark")}
+                            disabled={aiProcessing}
                             style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1px solid rgba(148,163,184,0.3)" }}
                             title="تدرج استوديو سينمائي">
                             🎬 تدرج سينمائي
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("chroma")}
+                            disabled={aiProcessing}
                             style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(0,177,64,0.2)", border: "1px solid rgba(0,177,64,0.4)", color: "#86efac" }}
                             title="خلفية خضراء كروما">
                             🟩 كروما خضراء

@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { processBackgroundRemoval } from "./ai-background-removal.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,23 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  app.use(express.json({ limit: "50mb" }));
+
+  // API endpoint for AI Neural Background Removal
+  app.post("/api/remove-background", async (req, res) => {
+    try {
+      const { image, roi, model } = req.body;
+      if (!image) {
+        return res.status(400).json({ error: "No image provided" });
+      }
+      const result = await processBackgroundRemoval(image, { roi, model });
+      res.json(result);
+    } catch (err) {
+      console.error("AI background removal error in server/index.ts:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   // Serve static files from dist/public in production
   const staticPath =
@@ -23,10 +41,10 @@ async function startServer() {
     res.sendFile(path.join(staticPath, "index.html"));
   });
 
-  const port = process.env.PORT || 3000;
+  const port = Number(process.env.PORT) || 3000;
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${port}/`);
   });
 }
 

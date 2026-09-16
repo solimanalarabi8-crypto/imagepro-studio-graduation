@@ -203,7 +203,59 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+function vitePluginAiBackgroundRemoval(): Plugin {
+  return {
+    name: "ai-background-removal-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/api/remove-background", async (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Method not allowed" }));
+          return;
+        }
+
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+
+        req.on("end", async () => {
+          try {
+            const payload = JSON.parse(body);
+            if (!payload.image) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "No image provided" }));
+              return;
+            }
+
+            const { processBackgroundRemoval } = await import("./server/ai-background-removal.js");
+            const result = await processBackgroundRemoval(payload.image, {
+              roi: payload.roi,
+              model: payload.model || "small",
+            });
+
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            console.error("AI background removal middleware error:", err);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector(),
+  vitePluginStorageProxy(),
+  vitePluginAiBackgroundRemoval(),
+];
 
 export default defineConfig({
   plugins,
@@ -222,17 +274,9 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
-    host: true,
-    allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
-      "localhost",
-      "127.0.0.1",
-    ],
+    strictPort: true,
+    host: "0.0.0.0",
+    allowedHosts: true,
     fs: {
       strict: true,
       deny: ["**/.*"],

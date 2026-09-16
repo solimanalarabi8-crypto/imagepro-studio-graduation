@@ -1,0 +1,8 @@
+{
+  "name": "ImagePro Studio",
+  "description": "Comprehensive image processing studio and creative suite with layers, retouching, drawing, filters, and color adjustments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
