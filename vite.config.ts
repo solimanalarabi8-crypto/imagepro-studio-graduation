@@ -228,16 +228,61 @@ function vitePluginAiBackgroundRemoval(): Plugin {
               return;
             }
 
-            const { processBackgroundRemoval } = await import("./server/ai-background-removal.js");
+            const { processBackgroundRemoval } = await import("./server/ai-background-removal.ts");
             const result = await processBackgroundRemoval(payload.image, {
               roi: payload.roi,
-              model: payload.model || "small",
+              model: payload.model || "fast",
+              feather: payload.feather,
+              threshold: payload.threshold,
+              defringe: payload.defringe,
             });
 
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(result));
           } catch (err) {
             console.error("AI background removal middleware error:", err);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+          }
+        });
+      });
+
+      server.middlewares.use("/api/background-effects", async (req, res) => {
+        if (req.method !== "POST") {
+          res.writeHead(405, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Method not allowed" }));
+          return;
+        }
+
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+
+        req.on("end", async () => {
+          try {
+            const payload = JSON.parse(body);
+            if (!payload.image || !payload.mask) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Image and mask are required" }));
+              return;
+            }
+
+            const { processBackgroundEffect } = await import("./server/ai-background-removal.ts");
+            const result = await processBackgroundEffect(payload.image, payload.mask, {
+              effect: payload.effect || "bokeh",
+              blurRadius: payload.blurRadius,
+              depthGradient: payload.depthGradient,
+              solidColor: payload.solidColor,
+              gradientType: payload.gradientType,
+              dimAmount: payload.dimAmount,
+              backdropDataUrl: payload.backdropDataUrl,
+            });
+
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            console.error("Background effect middleware error:", err);
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
           }

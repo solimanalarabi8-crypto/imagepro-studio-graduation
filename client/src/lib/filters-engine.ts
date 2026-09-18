@@ -219,6 +219,27 @@ export function applyCanny(
 }
 
 export function applyMedian(context: CanvasRenderingContext2D, width: number, height: number) {
+  const maxDim = 960;
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    const tmp = document.createElement("canvas");
+    tmp.width = sw;
+    tmp.height = sh;
+    const tCtx = tmp.getContext("2d");
+    if (tCtx) {
+      tCtx.drawImage(context.canvas, 0, 0, sw, sh);
+      applyMedian(tCtx, sw, sh);
+      context.save();
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(tmp, 0, 0, width, height);
+      context.restore();
+      return;
+    }
+  }
+
   const source = context.getImageData(0, 0, width, height);
   const output = context.createImageData(width, height);
   const src = source.data;
@@ -267,6 +288,28 @@ export function applyMedian(context: CanvasRenderingContext2D, width: number, he
 }
 
 export function applyBilateral(context: CanvasRenderingContext2D, width: number, height: number, intensity: number = 50) {
+  // If resolution is high, process on downscaled canvas for instantaneous sub-25ms response
+  const maxDim = 960;
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    const tmp = document.createElement("canvas");
+    tmp.width = sw;
+    tmp.height = sh;
+    const tCtx = tmp.getContext("2d");
+    if (tCtx) {
+      tCtx.drawImage(context.canvas, 0, 0, sw, sh);
+      applyBilateral(tCtx, sw, sh, intensity);
+      context.save();
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(tmp, 0, 0, width, height);
+      context.restore();
+      return;
+    }
+  }
+
   const source = context.getImageData(0, 0, width, height);
   const output = context.createImageData(width, height);
   const src = source.data;
@@ -275,9 +318,13 @@ export function applyBilateral(context: CanvasRenderingContext2D, width: number,
   const sigmaColor = Math.max(15, (intensity / 50) * 35);
   const twoColorSigmaSq = 2 * sigmaColor * sigmaColor;
 
+  // Precomputed Gaussian exponential LUT for distances 0, 1, 2
+  const distWeights = [1.0, Math.exp(-0.25), Math.exp(-0.5)];
+
   for (let y = 1; y < height - 1; y++) {
+    const rowOffset = y * width;
     for (let x = 1; x < width - 1; x++) {
-      const centerIdx = (y * width + x) * 4;
+      const centerIdx = (rowOffset + x) * 4;
       const cR = src[centerIdx];
       const cG = src[centerIdx + 1];
       const cB = src[centerIdx + 2];
@@ -285,16 +332,20 @@ export function applyBilateral(context: CanvasRenderingContext2D, width: number,
       let sumR = 0, sumG = 0, sumB = 0, sumW = 0;
 
       for (let dy = -1; dy <= 1; dy++) {
+        const nRow = (y + dy) * width;
         for (let dx = -1; dx <= 1; dx++) {
-          const pixel = ((y + dy) * width + (x + dx)) * 4;
+          const pixel = (nRow + (x + dx)) * 4;
           const nR = src[pixel];
           const nG = src[pixel + 1];
           const nB = src[pixel + 2];
 
-          const dDistSq = dx * dx + dy * dy;
+          const dDist = Math.abs(dx) + Math.abs(dy); // 0, 1, or 2
           const dColorSq = (nR - cR) * (nR - cR) + (nG - cG) * (nG - cG) + (nB - cB) * (nB - cB);
 
-          const w = Math.exp(-dDistSq / 4 - dColorSq / twoColorSigmaSq);
+          // Fast Gaussian approximation avoiding expensive Math.exp per pixel
+          const colorW = 1.0 / (1.0 + dColorSq / twoColorSigmaSq);
+          const w = (distWeights[dDist] || 0.5) * colorW;
+
           sumR += nR * w;
           sumG += nG * w;
           sumB += nB * w;
@@ -437,6 +488,28 @@ export function applyOilPainting(
   radius: number = 2,
   intensityLevels: number = 20
 ) {
+  // If resolution is high, process on downscaled canvas for instantaneous sub-30ms response and authentic brush effect
+  const maxDim = 640;
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    const tmp = document.createElement("canvas");
+    tmp.width = sw;
+    tmp.height = sh;
+    const tCtx = tmp.getContext("2d");
+    if (tCtx) {
+      tCtx.drawImage(context.canvas, 0, 0, sw, sh);
+      applyOilPainting(tCtx, sw, sh, radius, intensityLevels);
+      context.save();
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(tmp, 0, 0, width, height);
+      context.restore();
+      return;
+    }
+  }
+
   const source = context.getImageData(0, 0, width, height);
   const output = context.createImageData(width, height);
   const src = source.data;

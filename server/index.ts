@@ -2,7 +2,11 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
-import { processBackgroundRemoval } from "./ai-background-removal.js";
+import {
+  processBackgroundRemoval,
+  processBackgroundEffect,
+  prewarmModels,
+} from "./ai-background-removal.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,17 +17,61 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
 
+  // Prewarm model in background
+  prewarmModels();
+
   // API endpoint for AI Neural Background Removal
   app.post("/api/remove-background", async (req, res) => {
     try {
-      const { image, roi, model } = req.body;
+      const { image, roi, model, feather, threshold, defringe } = req.body;
       if (!image) {
         return res.status(400).json({ error: "No image provided" });
       }
-      const result = await processBackgroundRemoval(image, { roi, model });
+      const result = await processBackgroundRemoval(image, {
+        roi,
+        model,
+        feather,
+        threshold,
+        defringe,
+      });
       res.json(result);
     } catch (err) {
       console.error("AI background removal error in server/index.ts:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // API endpoint for AI Background Effects (Bokeh, Color Splash, Dim, Solid, Gradient)
+  app.post("/api/background-effects", async (req, res) => {
+    try {
+      const {
+        image,
+        mask,
+        effect,
+        blurRadius,
+        depthGradient,
+        solidColor,
+        gradientType,
+        dimAmount,
+        backdropDataUrl,
+      } = req.body;
+
+      if (!image || !mask) {
+        return res.status(400).json({ error: "Image and mask are required" });
+      }
+
+      const result = await processBackgroundEffect(image, mask, {
+        effect,
+        blurRadius,
+        depthGradient,
+        solidColor,
+        gradientType,
+        dimAmount,
+        backdropDataUrl,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("AI background effects error in server/index.ts:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
