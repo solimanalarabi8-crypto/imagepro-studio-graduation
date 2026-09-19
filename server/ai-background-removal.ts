@@ -167,19 +167,31 @@ async function runImglyRemoval(
   cropW: number,
   cropH: number,
   hasRoi: boolean,
-  modelName: "small" | "medium" | "large" = "medium"
+  modelName: "small" | "medium" | "large" = "small"
 ): Promise<{ fullMaskBytes: Buffer; fgPixels: number }> {
   const { removeBackground } = await import("@imgly/background-removal-node");
 
-  // Ensure processBuffer is PNG with valid upright pixels
-  const pngInput = await sharp(processBuffer).rotate().png().toBuffer();
-  const inputBlob = new Blob([pngInput], { type: "image/png" });
+  // Speed optimization: Scale down the inference buffer to max 1024px.
+  // Neural segmentation operates internally on 512-1024px, so feeding massive 2K/4K raw buffers to CPU WASM causes heavy lag.
+  const maxInferenceDim = 1024;
+  let inferBuffer: Buffer;
+  if (cropW > maxInferenceDim || cropH > maxInferenceDim) {
+    inferBuffer = await sharp(processBuffer)
+      .rotate()
+      .resize(maxInferenceDim, maxInferenceDim, { fit: "inside" })
+      .png({ compressionLevel: 4 })
+      .toBuffer();
+  } else {
+    inferBuffer = await sharp(processBuffer).rotate().png({ compressionLevel: 4 }).toBuffer();
+  }
 
+  const inputBlob = new Blob([inferBuffer], { type: "image/png" });
   const outputBlob = await removeBackground(inputBlob, { model: modelName });
   const outBuffer = Buffer.from(await outputBlob.arrayBuffer());
 
+  // Upscale the neural mask back to full target resolution with high-fidelity Lanczos3 interpolation
   const { data: outRgba } = await sharp(outBuffer)
-    .resize(cropW, cropH, { fit: "fill" })
+    .resize(cropW, cropH, { fit: "fill", kernel: "lanczos3" })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -187,11 +199,9 @@ async function runImglyRemoval(
   const cropAlpha = Buffer.alloc(cropW * cropH);
   let fgPixels = 0;
   for (let i = 0; i < cropW * cropH; i++) {
-    let a = outRgba[i * 4 + 3];
-    if (a < 10) a = 0;
-    else if (a > 245) a = 255;
+    const a = outRgba[i * 4 + 3];
     cropAlpha[i] = a;
-    if (a > 128) fgPixels++;
+    if (a > 64) fgPixels++;
   }
 
   let fullMaskBytes: Buffer;
@@ -277,7 +287,7 @@ export async function processBackgroundRemoval(
       cropW,
       cropH,
       hasRoi,
-      "medium"
+      "small"
     );
     if (imglyRes.fgPixels >= minExpectedFg) {
       fullMaskBytes = imglyRes.fullMaskBytes;

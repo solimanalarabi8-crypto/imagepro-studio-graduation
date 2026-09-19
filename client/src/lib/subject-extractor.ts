@@ -505,9 +505,11 @@ export async function extractSubjectWithAI(
   if (options.onProgress) {
     options.onProgress("تجهيز الصورة للذكاء الاصطناعي العصبي...", 20);
   }
+  // Yield to main thread so browser renders progress indicator smoothly
+  await new Promise((r) => setTimeout(r, 20));
 
-  // Max dimension 2560px allows typical high-res photos (like 2176x1632) to be processed at 100% native quality
-  const maxDim = 2560;
+  // Max dimension 1280px allows ultra-fast synchronous encoding (30ms vs 800ms) and prevents browser freezing
+  const maxDim = 1280;
   let sendDataUrl = "";
   if (W > maxDim || H > maxDim) {
     const scale = Math.min(maxDim / W, maxDim / H);
@@ -531,6 +533,7 @@ export async function extractSubjectWithAI(
   if (options.onProgress) {
     options.onProgress("تحليل الصورة وفصل الجسم بالذكاء الاصطناعي...", 50);
   }
+  await new Promise((r) => setTimeout(r, 20));
 
   const modelParam = options.model || "fast";
   const response = await fetch("/api/remove-background", {

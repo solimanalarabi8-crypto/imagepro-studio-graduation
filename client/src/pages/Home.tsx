@@ -1650,6 +1650,9 @@ export default function Home() {
     setAiProgress(15);
     setStatus(`⏳ جاري عزل وفصل الجسم المطلوب بالذكاء الاصطناعي (${modelName})...`);
 
+    // Yield to browser render loop so the UI instantly paints the progress overlay without any freezing
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
     try {
       const baseSource = bgBaseOriginalUrl || imageSrc;
       const result = await extractSubjectFromCanvas(baseSource, {
