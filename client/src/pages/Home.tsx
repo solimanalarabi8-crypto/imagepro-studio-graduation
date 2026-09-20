@@ -14,7 +14,7 @@ import {
   duplicateLayer as duplicateLayerHelper,
 } from "@/lib/layers-history";
 import { calculateHistogram, applyPixelAdjustments, DEFAULT_ADJUSTMENTS, type HistogramData } from "@/lib/color-adjustments";
-import { FILTER_CATALOG, executeFilter, type FilterMode, type FilterCategory } from "@/lib/filters-engine";
+import { FILTER_CATALOG, executeFilter, generateFilterPreviews, type FilterMode, type FilterCategory } from "@/lib/filters-engine";
 import {
   serializeProjectPackage,
   deserializeProjectPackage,
@@ -44,6 +44,16 @@ import {
 import { ProductBackgroundsModal } from "@/components/ProductBackgroundsModal";
 import { TemplatesModal } from "@/components/TemplatesModal";
 import { BlendModal } from "@/components/BlendModal";
+import { FiltersStudioModal } from "@/components/FiltersStudioModal";
+import { SmartDropHubModal } from "@/components/SmartDropHubModal";
+import {
+  extractDroppedImageMeta,
+  calculateFittedPlacement,
+  isProjectFile,
+  isSupportedImageFile,
+  type DroppedImageMeta,
+  type DropActionType,
+} from "@/lib/smart-drop-hub";
 import { i18n, type Language } from "@/lib/i18n";
 import {
   applyCloneStamp,
@@ -537,6 +547,15 @@ export default function Home() {
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isBlendModalOpen, setIsBlendModalOpen] = useState(false);
 
+  // Section 6 & Canva Visual Suite: Live Filter Previews & Smart Drop Hub State
+  const [isFiltersStudioOpen, setIsFiltersStudioOpen] = useState(false);
+  const [filterThumbnails, setFilterThumbnails] = useState<Record<FilterMode, string>>({} as Record<FilterMode, string>);
+  const [isDragOverStage, setIsDragOverStage] = useState(false);
+  const [droppedImageMeta, setDroppedImageMeta] = useState<DroppedImageMeta | null>(null);
+  const [isSmartDropHubOpen, setIsSmartDropHubOpen] = useState(false);
+  const [preloadedBlendImage, setPreloadedBlendImage] = useState<string | null>(null);
+  const dragCounterRef = useRef(0);
+
   // Global i18n & Theme State
   const [currentLang, setCurrentLang] = useState<Language>("ar");
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
@@ -717,6 +736,28 @@ export default function Home() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Section 6: Real-time Live Filter Preview Generation across all 22 filters
+  useEffect(() => {
+    if (!imageSrc) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const thumbs = generateFilterPreviews(
+          img,
+          img.naturalWidth || img.width || 800,
+          img.naturalHeight || img.height || 600,
+          110,
+          75
+        );
+        setFilterThumbnails(thumbs);
+      } catch (err) {
+        console.error("Filter preview generation error:", err);
+      }
+    };
+    img.src = imageSrc;
+  }, [imageSrc]);
 
   // Listen to fullscreen changes across document
   useEffect(() => {
@@ -2258,6 +2299,129 @@ export default function Home() {
     cachedImageSrcRef.current = null;
     baseOffscreenCanvasRef.current = null;
     setStatus(`✂️ تم اقتصاص مساحة العمل بالكامل لتطابق المحتوى الصافي بدقة متناهية (${floatingSubject.width}×${floatingSubject.height} بكسل) — تم إزالة أي مساحة إضافية تماماً!`);
+  };
+
+  /**
+   * Section 22: Smart Drag & Drop Hub Action Handler
+   */
+  const handleSmartDropAction = async (action: DropActionType) => {
+    if (!droppedImageMeta) return;
+
+    if (action === "layer") {
+      const canvasW = canvasRef.current?.width || imageSize.width || 1080;
+      const canvasH = canvasRef.current?.height || imageSize.height || 1080;
+      const placement = calculateFittedPlacement(
+        droppedImageMeta.width,
+        droppedImageMeta.height,
+        canvasW,
+        canvasH,
+        0.75
+      );
+
+      saveAiOriginalSnapshot("إضافة طبقة مسحوبة");
+
+      const newSubject: FloatingSubject = {
+        id: `subject-${Date.now()}`,
+        dataUrl: droppedImageMeta.dataUrl,
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+        naturalWidth: droppedImageMeta.width,
+        naturalHeight: droppedImageMeta.height,
+        rotation: 0
+      };
+
+      floatingSubjectPosRef.current = { x: placement.x, y: placement.y };
+      setFloatingSubject(newSubject);
+      setActiveTool("select");
+
+      const newLayerId = `layer-drop-${Date.now()}`;
+      setLayers((prev) => [
+        {
+          id: newLayerId,
+          name: droppedImageMeta.name.replace(/\.[^/.]+$/, ""),
+          kind: "image",
+          color: "#818cf8",
+          visible: true,
+          opacity: 100,
+          blendMode: "normal"
+        },
+        ...prev
+      ]);
+      setSelectedLayer(newLayerId);
+      setStatus(currentLang === "ar" ? "تمت إضافة الصورة كعنصر حر قابل للتحويل والتحريك" : "Added image as floating layer");
+    } else if (action === "ai_cutout") {
+      setStatus(currentLang === "ar" ? "جارٍ عزل خلفية الصورة بالذكاء الاصطناعي..." : "Removing background with AI...");
+      setIsRendering(true);
+      try {
+        const off = document.createElement("canvas");
+        off.width = droppedImageMeta.width;
+        off.height = droppedImageMeta.height;
+        const ctx = off.getContext("2d");
+        if (ctx) {
+          const img = new Image();
+          await new Promise<void>((res) => {
+            img.onload = () => {
+              ctx.drawImage(img, 0, 0);
+              res();
+            };
+            img.src = droppedImageMeta.dataUrl;
+          });
+          const result = await extractSubjectFromCanvas(off, {
+            tolerance: bgRemoveTolerance,
+            edgeFeather: bgFeather,
+          });
+          const canvasW = canvasRef.current?.width || imageSize.width || 1080;
+          const canvasH = canvasRef.current?.height || imageSize.height || 1080;
+          const placement = calculateFittedPlacement(
+            droppedImageMeta.width,
+            droppedImageMeta.height,
+            canvasW,
+            canvasH,
+            0.7
+          );
+
+          saveAiOriginalSnapshot("عزل ذكي بالذكاء الاصطناعي");
+          const newSubject: FloatingSubject = {
+            id: `subject-ai-${Date.now()}`,
+            dataUrl: result.dataUrl,
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
+            naturalWidth: droppedImageMeta.width,
+            naturalHeight: droppedImageMeta.height,
+            rotation: 0
+          };
+
+          floatingSubjectPosRef.current = { x: placement.x, y: placement.y };
+          setFloatingSubject(newSubject);
+          setActiveTool("select");
+          setStatus(currentLang === "ar" ? "✨ تم عزل وتفريغ العنصر وإدراجه كعنصر حر بنجاح" : "Subject extracted and inserted!");
+        }
+      } catch (err) {
+        console.error("AI Cutout drop error:", err);
+        setStatus(currentLang === "ar" ? "فشل العزل الآلي — تم الإدراج المباشر" : "Cutout failed");
+      } finally {
+        setIsRendering(false);
+      }
+    } else if (action === "new_project") {
+      saveAiOriginalSnapshot("فتح مشروع جديد بالسحب والإفلات");
+      setImageName(droppedImageMeta.name.replace(/\.[^/.]+$/, ""));
+      setImageSrc(droppedImageMeta.dataUrl);
+      setImageSize({ width: droppedImageMeta.width, height: droppedImageMeta.height });
+      setFloatingSubject(null);
+      floatingSubjectPosRef.current = null;
+      setTimeout(fitToScreen, 80);
+      setStatus(currentLang === "ar" ? `تم فتح الصورة ككانفاس جديد (${droppedImageMeta.width}×${droppedImageMeta.height})` : `Opened new canvas`);
+    } else if (action === "blend_studio") {
+      setPreloadedBlendImage(droppedImageMeta.dataUrl);
+      setIsBlendModalOpen(true);
+      setStatus(currentLang === "ar" ? "تم إرسال الصورة إلى استوديو دمج الصورتين" : "Sent to Two-Image Blend Studio");
+    }
+
+    setDroppedImageMeta(null);
   };
 
   /**
@@ -4455,56 +4619,85 @@ export default function Home() {
           </nav>
 
           <div className="command-actions">
-            {/* Quick Action Studio Pills */}
-            <button
-              onClick={() => setIsTemplatesModalOpen(true)}
-              className="studio-pill studio-pill-new"
-              title={currentLang === "ar" ? "مشروع جديد واختيار قوالب جاهزة" : "New Project & Templates"}
-            >
-              ✨ {currentLang === "ar" ? "مشروع جديد" : "New Project"}
-            </button>
+            {/* Canva-Grade Capsule Dock Bar */}
+            <div className="canva-capsule-dock">
+              {/* Canva Signature Featured Pill: Magic AI Studio */}
+              <button
+                onClick={handlePureContentCutout}
+                className="canva-pill-featured"
+                title={currentLang === "ar" ? "استوديو الذكاء الاصطناعي والتفريغ العصبي IS-Net" : "Magic AI Cutout Studio"}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{currentLang === "ar" ? "الذكاء الاصطناعي" : "Magic AI"}</span>
+              </button>
 
-            <button
-              onClick={() => setIsBlendModalOpen(true)}
-              className="studio-pill studio-pill-blend"
-              title={currentLang === "ar" ? "استوديو دمج صورتين باحترافية" : "Two-Image Blend Studio"}
-            >
-              🖼️ {currentLang === "ar" ? "دمج صورتين" : "Blend Images"}
-            </button>
+              {/* Pill 2: New Project & Templates */}
+              <button
+                onClick={() => setIsTemplatesModalOpen(true)}
+                className="canva-pill-item"
+                title={currentLang === "ar" ? "مشروع جديد واختيار قوالب جاهزة" : "New Project & Templates"}
+              >
+                <span>📐</span>
+                <span>{currentLang === "ar" ? "القوالب" : "Templates"}</span>
+              </button>
 
-            <button
-              onClick={() => setIsProductBgModalOpen(true)}
-              className="studio-pill studio-pill-bg"
-              title={currentLang === "ar" ? "مكتبة خلفيات المنتجات واستوديو التصوير" : "Product Showcase Backgrounds"}
-            >
-              🎨 {currentLang === "ar" ? "خلفيات الاستوديو" : "Studio BG"}
-            </button>
+              {/* Pill 3: Two-Image Blend Studio */}
+              <button
+                onClick={() => setIsBlendModalOpen(true)}
+                className="canva-pill-item"
+                title={currentLang === "ar" ? "استوديو دمج صورتين باحترافية" : "Two-Image Blend Studio"}
+              >
+                <span>🖼️</span>
+                <span>{currentLang === "ar" ? "دمج صورتين" : "Blend"}</span>
+              </button>
 
-            {/* Language Toggle */}
-            <button
-              onClick={() => {
-                const nextLang = currentLang === "ar" ? "en" : "ar";
-                setCurrentLang(nextLang);
-                setStatus(nextLang === "ar" ? "تم تحويل اللغة إلى العربية" : "Switched to English");
-              }}
-              className="studio-pill studio-pill-neutral"
-              title={currentLang === "ar" ? "Switch to English" : "التحويل للعربية"}
-            >
-              🌐 {currentLang === "ar" ? "EN" : "عربي"}
-            </button>
+              {/* Pill 4: Product Showcase Studio Backgrounds */}
+              <button
+                onClick={() => setIsProductBgModalOpen(true)}
+                className="canva-pill-item"
+                title={currentLang === "ar" ? "مكتبة خلفيات المنتجات واستوديو التصوير" : "Product Showcase Backgrounds"}
+              >
+                <span>🎨</span>
+                <span>{currentLang === "ar" ? "الخلفيات" : "Backdrop"}</span>
+              </button>
 
-            {/* Theme Toggle */}
-            <button
-              onClick={() => {
-                const nextTheme = currentTheme === "dark" ? "light" : "dark";
-                setCurrentTheme(nextTheme);
-                document.documentElement.classList.toggle("light-theme", nextTheme === "light");
-              }}
-              className="studio-pill studio-pill-neutral"
-              title={currentTheme === "dark" ? "التحويل للوضع النهاري" : "Switch to Dark Mode"}
-            >
-              {currentTheme === "dark" ? "☀️" : "🌙"}
-            </button>
+              {/* Pill 5: Live Visual Filters Studio */}
+              <button
+                onClick={() => setIsFiltersStudioOpen(true)}
+                className="canva-pill-item"
+                title={currentLang === "ar" ? "استوديو الفلاتر الحي — معاينة حية لجميع الفلاتر على صورتك" : "Live Visual Filters Studio"}
+              >
+                <span>🎭</span>
+                <span>{currentLang === "ar" ? "الفلاتر الحية" : "Live Filters"}</span>
+              </button>
+
+              {/* Language Toggle */}
+              <button
+                onClick={() => {
+                  const nextLang = currentLang === "ar" ? "en" : "ar";
+                  setCurrentLang(nextLang);
+                  setStatus(nextLang === "ar" ? "تم تحويل اللغة إلى العربية" : "Switched to English");
+                }}
+                className="canva-pill-item"
+                title={currentLang === "ar" ? "Switch to English" : "التحويل للعربية"}
+              >
+                <span>🌐</span>
+                <span className="font-bold">{currentLang === "ar" ? "EN" : "عربي"}</span>
+              </button>
+
+              {/* Theme Toggle */}
+              <button
+                onClick={() => {
+                  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+                  setCurrentTheme(nextTheme);
+                  document.documentElement.classList.toggle("light-theme", nextTheme === "light");
+                }}
+                className="canva-pill-item"
+                title={currentTheme === "dark" ? "التحويل للوضع النهاري" : "Switch to Dark Mode"}
+              >
+                <span>{currentTheme === "dark" ? "☀️" : "🌙"}</span>
+              </button>
+            </div>
 
             <button className="save-state save-action" onClick={saveProject} data-testid="save-project">
               <span className="save-dot" /> {isRendering ? "جارٍ المعالجة..." : "حفظ المشروع"}
@@ -5095,20 +5288,76 @@ export default function Home() {
                   setIsPanning(false);
                 }
               }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
+              onDragEnter={(e) => {
+                e.preventDefault();
+                dragCounterRef.current += 1;
+                setIsDragOverStage(true);
+              }}
+              onDragOver={(event) => {
                 event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+                if (dragCounterRef.current === 0) {
+                  setIsDragOverStage(false);
+                }
+              }}
+              onDrop={async (event) => {
+                event.preventDefault();
+                dragCounterRef.current = 0;
+                setIsDragOverStage(false);
                 const file = event.dataTransfer.files[0];
-                if (file) {
-                  const data = new DataTransfer();
-                  data.items.add(file);
-                  if (uploadRef.current) {
-                    uploadRef.current.files = data.files;
-                    uploadRef.current.dispatchEvent(new Event("change", { bubbles: true }));
+                if (!file) return;
+
+                if (isProjectFile(file)) {
+                  const text = await file.text();
+                  try {
+                    const pkg = deserializeProjectPackage(text);
+                    setImageName(pkg.state.imageName || file.name.replace(/\.imagepro$/, ""));
+                    setImageSrc(pkg.state.imageData);
+                    setStatus(currentLang === "ar" ? "تم استيراد ملف المشروع (.imagepro) بنجاح" : "Project imported successfully");
+                  } catch (err) {
+                    setStatus("فشل استيراد ملف المشروع");
+                  }
+                  return;
+                }
+
+                if (isSupportedImageFile(file)) {
+                  try {
+                    const meta = await extractDroppedImageMeta(file);
+                    setDroppedImageMeta(meta);
+                    setIsSmartDropHubOpen(true);
+                  } catch (err) {
+                    console.error("Drop meta error:", err);
+                    const data = new DataTransfer();
+                    data.items.add(file);
+                    if (uploadRef.current) {
+                      uploadRef.current.files = data.files;
+                      uploadRef.current.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
                   }
                 }
               }}
             >
+              {/* Canva-Grade Drag & Drop Stage Live Overlay */}
+              {isDragOverStage && (
+                <div className="stage-drag-overlay">
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-2xl shadow-cyan-500/40 text-white">
+                    <Sparkles className="w-8 h-8 animate-pulse" />
+                  </div>
+                  <div className="text-center px-4">
+                    <h3 className="text-base font-extrabold tracking-wide text-white">
+                      {currentLang === "ar" ? "أفلت الصورة لفتح مركز الإدراج الذكي" : "Drop Image to Open Smart Hub"}
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      {currentLang === "ar" ? "إضافة كطبقة • تفريغ ذكي بالذكاء الاصطناعي • مشروع جديد • استوديو الدمج" : "Layer • AI Cutout • New Canvas • Two-Image Blend"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Phase 2: Toggleable Grid */}
               {showGrid && <div className="stage-grid" />}
 
@@ -6576,23 +6825,57 @@ export default function Home() {
                     );
                   })()}
 
-                  <div className="filters-grid">
-                    {FILTER_CATALOG.filter((f) => filterCategoryFilter === "الكل" || f.category === filterCategoryFilter).map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        className={`filter-chip ${filterMode === f.id ? "active" : ""}`}
-                        onClick={() => {
-                          setFilterMode(f.id);
-                          if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
-                          setStatus(`تم تطبيق مرشح: ${f.nameArabic}`);
-                        }}
-                        title={f.description}
-                      >
-                        <span>{f.nameArabic}</span>
-                        {filterMode === f.id && <span className="filter-chip-badge">✓</span>}
-                      </button>
-                    ))}
+                  {/* Section 6 & Canva: Live Visual Photo Filter Previews */}
+                  <div style={{ padding: "0 17px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#a855f7", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Sparkles size={13} /> {currentLang === "ar" ? "معاينة حية على صورتك" : "Live Photo Previews"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsFiltersStudioOpen(true)}
+                      className="canva-white-pill-btn"
+                      style={{ fontSize: "10.5px", padding: "4px 10px", gap: "4px" }}
+                    >
+                      <Sparkles size={11} /> {currentLang === "ar" ? "استوديو الفلاتر الموسع" : "Expand Studio"}
+                    </button>
+                  </div>
+
+                  <div className="filter-visual-grid" style={{ margin: "4px 17px 14px" }}>
+                    {FILTER_CATALOG.filter((f) => filterCategoryFilter === "الكل" || f.category === filterCategoryFilter).map((f) => {
+                      const isActive = filterMode === f.id;
+                      const thumb = filterThumbnails[f.id];
+                      return (
+                        <div
+                          key={f.id}
+                          className={`filter-visual-card ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            setFilterMode(f.id);
+                            if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
+                            setStatus(`تم تطبيق مرشح: ${f.nameArabic}`);
+                          }}
+                          title={f.description}
+                        >
+                          <div className="filter-visual-thumb-wrap">
+                            {thumb ? (
+                              <img src={thumb} alt={f.nameArabic} className="filter-visual-thumb" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-950">
+                                {f.nameArabic}
+                              </div>
+                            )}
+                            {isActive && (
+                              <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full p-0.5 shadow-md">
+                                <Check size={10} strokeWidth={3} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="filter-visual-meta">
+                            <span className="filter-visual-name">{f.nameArabic}</span>
+                            <span className="filter-visual-badge">{f.category}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="adjustments-actions">
@@ -7288,9 +7571,13 @@ export default function Home() {
         {/* Studio Modal 3: Two-Image Blend Studio */}
         <BlendModal
           isOpen={isBlendModalOpen}
-          onClose={() => setIsBlendModalOpen(false)}
+          onClose={() => {
+            setIsBlendModalOpen(false);
+            setPreloadedBlendImage(null);
+          }}
           baseImageSrc={imageSrc}
           isArabic={currentLang === "ar"}
+          initialSecondImageSrc={preloadedBlendImage}
           onApplyBlend={(blendedDataUrl: string, asNewLayer: boolean, blendMode: string, opacity: number) => {
             if (asNewLayer) {
               const newLayerId = `layer-blend-${Date.now()}`;
@@ -7311,6 +7598,40 @@ export default function Home() {
             if (cachedImageRef.current) cachedImageRef.current.src = blendedDataUrl;
             setStatus(currentLang === "ar" ? "تم تثبيت دمج الصورتين على مساحة العمل بنجاح" : "Two-image blend applied to canvas");
           }}
+        />
+
+        {/* Studio Modal 4: Canva-Grade Live Visual Filters Studio */}
+        <FiltersStudioModal
+          isOpen={isFiltersStudioOpen}
+          onClose={() => setIsFiltersStudioOpen(false)}
+          activeFilter={filterMode}
+          filterIntensity={filterIntensity}
+          filterThumbnails={filterThumbnails}
+          onSelectFilter={(filterId, defaultIntensity) => {
+            setFilterMode(filterId);
+            if (defaultIntensity !== undefined) setFilterIntensity(defaultIntensity);
+            const def = FILTER_CATALOG.find((f) => f.id === filterId);
+            setStatus(currentLang === "ar" ? `تم تطبيق المرشح الحي: ${def?.nameArabic || filterId}` : `Applied live filter: ${filterId}`);
+          }}
+          onChangeIntensity={(val) => setFilterIntensity(val)}
+          onBakeFilter={applyFilterPermanently}
+          onResetFilter={() => {
+            setFilterMode("none");
+            setStatus(currentLang === "ar" ? "تم إلغاء المرشح والعودة للأصل" : "Filter reset to original");
+          }}
+          lang={currentLang}
+        />
+
+        {/* Studio Modal 5: Smart Drag & Drop Hub Modal (Section 22) */}
+        <SmartDropHubModal
+          isOpen={isSmartDropHubOpen}
+          onClose={() => {
+            setIsSmartDropHubOpen(false);
+            setDroppedImageMeta(null);
+          }}
+          imageMeta={droppedImageMeta}
+          onSelectAction={handleSmartDropAction}
+          lang={currentLang}
         />
       </main>
     </TooltipProvider>

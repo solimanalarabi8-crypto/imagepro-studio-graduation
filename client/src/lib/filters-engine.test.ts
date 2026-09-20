@@ -63,4 +63,9 @@ describe("Point 6: Filters & Effects Catalog", () => {
     expect(artisticFilters.some((f) => f.id === "charcoal")).toBe(true);
     expect(artisticFilters.some((f) => f.id === "sketch")).toBe(true);
   });
+
+  it("exports generateFilterPreviews function", async () => {
+    const { generateFilterPreviews } = await import("./filters-engine");
+    expect(typeof generateFilterPreviews).toBe("function");
+  });
 });

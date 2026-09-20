@@ -617,3 +617,53 @@ export function executeFilter(
       break;
   }
 }
+
+/**
+ * Generates lightweight live preview data URLs for all filters in the catalog
+ * applied to the provided source (HTMLImageElement or HTMLCanvasElement).
+ */
+export function generateFilterPreviews(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  thumbWidth: number = 110,
+  thumbHeight: number = 80
+): Record<FilterMode, string> {
+  const previews: Partial<Record<FilterMode, string>> = {};
+  if (typeof document === "undefined") return previews as Record<FilterMode, string>;
+
+  // Offscreen canvas for base downscaled thumbnail
+  const baseCanvas = document.createElement("canvas");
+  baseCanvas.width = thumbWidth;
+  baseCanvas.height = thumbHeight;
+  const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
+  if (!baseCtx) return previews as Record<FilterMode, string>;
+
+  // Draw source image proportionally cropped or fit
+  baseCtx.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, thumbWidth, thumbHeight);
+
+  // Work canvas for applying each filter
+  const workCanvas = document.createElement("canvas");
+  workCanvas.width = thumbWidth;
+  workCanvas.height = thumbHeight;
+  const workCtx = workCanvas.getContext("2d", { willReadFrequently: true });
+  if (!workCtx) return previews as Record<FilterMode, string>;
+
+  for (const filter of FILTER_CATALOG) {
+    if (filter.id === "none") {
+      previews[filter.id] = baseCanvas.toDataURL("image/jpeg", 0.85);
+      continue;
+    }
+
+    try {
+      workCtx.clearRect(0, 0, thumbWidth, thumbHeight);
+      workCtx.drawImage(baseCanvas, 0, 0);
+      executeFilter(workCtx, thumbWidth, thumbHeight, filter.id, filter.defaultIntensity || 50);
+      previews[filter.id] = workCanvas.toDataURL("image/jpeg", 0.85);
+    } catch {
+      previews[filter.id] = baseCanvas.toDataURL("image/jpeg", 0.85);
+    }
+  }
+
+  return previews as Record<FilterMode, string>;
+}

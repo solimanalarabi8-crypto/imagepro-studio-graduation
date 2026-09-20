@@ -8,16 +8,24 @@ interface BlendModalProps {
   baseImageSrc: string;
   onApplyBlend: (resultDataUrl: string, asNewLayer: boolean, blendMode: string, opacity: number) => void;
   isArabic?: boolean;
+  initialSecondImageSrc?: string | null;
 }
 
-export default function BlendModal({
+export function BlendModal({
   isOpen,
   onClose,
   baseImageSrc,
   onApplyBlend,
   isArabic = true,
+  initialSecondImageSrc,
 }: BlendModalProps) {
-  const [secondImageSrc, setSecondImageSrc] = useState<string | null>(null);
+  const [secondImageSrc, setSecondImageSrc] = useState<string | null>(initialSecondImageSrc || null);
+
+  useEffect(() => {
+    if (initialSecondImageSrc) {
+      setSecondImageSrc(initialSecondImageSrc);
+    }
+  }, [initialSecondImageSrc]);
   const [blendType, setBlendType] = useState<"overlay" | "side-h" | "side-v" | "gradient">("overlay");
   const [blendMode, setBlendMode] = useState<string>("overlay");
   const [opacity, setOpacity] = useState<number>(85);
@@ -518,5 +526,5 @@ export default function BlendModal({
   );
 }
 
-export { BlendModal };
+export default BlendModal;
 

@@ -109,8 +109,81 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {activeTab === "presets" ? (
             <>
+              {/* Canva-Grade Visual Suite Hero Banners */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                {/* Banner 1: Magic Layers & AI */}
+                <div className="canva-banner-card canva-banner-purple min-h-[140px]">
+                  <div className="flex items-start justify-between">
+                    <span className="canva-pointer-tag">
+                      {isAr ? "ميزة جديدة كلياً ✨" : "Brand New Feature ✨"}
+                    </span>
+                    <Sparkles className="w-5 h-5 text-white/80" />
+                  </div>
+                  <div className="my-2">
+                    <h3 className="text-sm font-extrabold text-white leading-snug">
+                      {isAr
+                        ? "حوّل صورتك إلى تصميم قابل للتعديل مع الطبقات السحرية"
+                        : "Transform your photos with Magic Layers & AI"}
+                    </h3>
+                    <p className="text-[11px] text-white/80 mt-1">
+                      {isAr
+                        ? "عزل ذكي للأجسام، قوالب سوشيال ميديا مسبقة القياس، وتحكم بكسلي كامل"
+                        : "Smart subject extraction, pre-measured social templates, and total pixel control"}
+                    </p>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemplateId("insta_post");
+                        setCustomWidth(1080);
+                        setCustomHeight(1080);
+                      }}
+                      className="canva-white-pill-btn"
+                    >
+                      {isAr ? "استكشف الطبقات السحرية" : "Explore Magic Layers"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Banner 2: Magic Eraser */}
+                <div className="canva-banner-card canva-banner-orange min-h-[140px]">
+                  <div className="flex items-start justify-between">
+                    <span className="canva-pointer-tag" style={{ background: "#fde047", color: "#713f12" }}>
+                      {isAr ? "تنظيف فوري ✂️" : "Instant Healing ✂️"}
+                    </span>
+                    <Sparkles className="w-5 h-5 text-white/80" />
+                  </div>
+                  <div className="my-2">
+                    <h3 className="text-sm font-extrabold text-white leading-snug">
+                      {isAr
+                        ? "استخدم الممحاة السحرية لتنظيف عيوب الصور"
+                        : "Use Magic Eraser to clean and heal photos"}
+                    </h3>
+                    <p className="text-[11px] text-white/80 mt-1">
+                      {isAr
+                        ? "مسح بكسل نقي لشفافية 100% وإزالة العناصر المزعجة بلمسة واحدة"
+                        : "Pure alpha erasing to 100% transparency with intelligent edge protection"}
+                    </p>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemplateId("banner_yt");
+                        setCustomWidth(2560);
+                        setCustomHeight(1440);
+                      }}
+                      className="canva-white-pill-btn"
+                    >
+                      {isAr ? "استكشف الممحاة السحرية" : "Explore Magic Eraser"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Category Filter */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                 <button
                   onClick={() => setActiveCategory("all")}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
