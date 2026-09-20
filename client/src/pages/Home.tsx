@@ -36,9 +36,14 @@ import {
   drawSmoothStroke,
   drawAdvancedShape,
   applyFloodFill,
+  applyMagicEraser,
   type ShapeType,
   type ShapeFillMode,
 } from "@/lib/drawing-engine";
+import { ProductBackgroundsModal } from "@/components/ProductBackgroundsModal";
+import { TemplatesModal } from "@/components/TemplatesModal";
+import { BlendModal } from "@/components/BlendModal";
+import { i18n, type Language } from "@/lib/i18n";
 import {
   applyCloneStamp,
   applyHealingBrush,
@@ -517,6 +522,22 @@ export default function Home() {
   const [brushHardness, setBrushHardness] = useState(100);
   const [activeShapeType, setActiveShapeType] = useState<ShapeType>("rectangle");
   const [shapeFillMode, setShapeFillMode] = useState<ShapeFillMode>("stroke");
+
+  // Surgical Eraser & Multi-Target Modes
+  const [eraserMode, setEraserMode] = useState<"pixels" | "paint" | "magic">("pixels");
+  const [magicEraserTolerance, setMagicEraserTolerance] = useState<number>(32);
+  const [magicEraserContiguous, setMagicEraserContiguous] = useState<boolean>(true);
+  const isErasingPixelsRef = useRef(false);
+
+  // Studio Modals State
+  const [isProductBgModalOpen, setIsProductBgModalOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
+  const [isBlendModalOpen, setIsBlendModalOpen] = useState(false);
+
+  // Global i18n & Theme State
+  const [currentLang, setCurrentLang] = useState<Language>("ar");
+  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
+  const t = i18n[currentLang];
 
   // Point 8: Retouching & Defect Removal State
   const [cloneSource, setCloneSource] = useState<CloneSourcePoint | null>(null);
@@ -3353,13 +3374,61 @@ export default function Home() {
       return;
     }
     if (activeTool === "eraser") {
-      event.currentTarget.setPointerCapture(event.pointerId);
-      setIsDrawing(true);
       const point = pointFromPointer(event);
       lastPointRef.current = point;
 
-      let targetId = selectedLayer;
+      // 1. Magic Eraser (Click to flood-erase contiguous color pixels to alpha 0)
+      if (eraserMode === "magic") {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            applyMagicEraser(
+              ctx,
+              canvas.width,
+              canvas.height,
+              Math.round(point.x),
+              Math.round(point.y),
+              magicEraserTolerance,
+              magicEraserContiguous
+            );
+            const newUrl = canvas.toDataURL("image/png");
+            setImageSrc(newUrl);
+            if (cachedImageRef.current) cachedImageRef.current.src = newUrl;
+            setStatus(currentLang === "ar" ? "تم مسح المساحة اللونية المتصلة بنجاح بالممحاة السحرية الذكية ✨" : "Smart Magic Eraser cleared target area ✨");
+          }
+        }
+        return;
+      }
+
+      // 2. Continuous Eraser (Pixels or Paint Layer)
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsDrawing(true);
+
       const currentLayer = layers.find((l) => l.id === selectedLayer);
+      const isPixelTarget = eraserMode === "pixels" || !currentLayer || currentLayer.kind === "image" || currentLayer.kind === "background";
+
+      if (isPixelTarget) {
+        isErasingPixelsRef.current = true;
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) {
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.globalCompositeOperation = "destination-out";
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(2, brushSize / 2), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        eraseAt(point, selectedLayer);
+        setStatus(currentLang === "ar" ? `الممحاة الجراحية نشطة (الحجم: ${brushSize}px) — مسح مباشر للبكسلات إلى الشفافية` : `Pixel Eraser active (${brushSize}px)`);
+        return;
+      }
+
+      // Erasing paint/text layers
+      isErasingPixelsRef.current = false;
+      let targetId = selectedLayer;
       if (!currentLayer || (currentLayer.kind !== "paint" && currentLayer.kind !== "text")) {
         const paintLayer = layers.find((l) => l.kind === "paint");
         if (paintLayer) {
@@ -3394,7 +3463,7 @@ export default function Home() {
         ctx.restore();
       }
       eraseAt(point, targetId);
-      setStatus(`الممحاة نشطة (الحجم: ${brushSize}px) — اسحب لمسح الرسم بدقة وفورية`);
+      setStatus(currentLang === "ar" ? `الممحاة نشطة (الحجم: ${brushSize}px) — مسح الطبقات الرسومية` : `Eraser active (${brushSize}px)`);
       return;
     }
     if (activeTool === "clone") {
@@ -3501,20 +3570,22 @@ export default function Home() {
       lastPointRef.current = point;
       return;
     }
-    if (activeTool === "eraser" && isDrawing && currentStrokeRef.current && lastPointRef.current) {
-      currentStrokeRef.current.points.push(point);
+    if (activeTool === "eraser" && isDrawing && lastPointRef.current) {
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) {
         ctx.save();
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = currentStrokeRef.current.width;
+        ctx.lineWidth = Math.max(2, brushSize);
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
         ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
         ctx.lineTo(point.x, point.y);
         ctx.stroke();
         ctx.restore();
+      }
+      if (currentStrokeRef.current) {
+        currentStrokeRef.current.points.push(point);
       }
       const targetId = eraserTargetLayerRef.current || undefined;
       eraseAt(point, targetId);
@@ -3679,29 +3750,23 @@ export default function Home() {
           if (completedStroke.layerId) setTimeout(() => generateLayerThumbnail(completedStroke.layerId as string), 10);
         }
       }
-      if ((activeTool === "clone" || activeTool === "heal") && canvasRef.current) {
-        setImageSrc(canvasRef.current.toDataURL("image/png"));
+      if ((activeTool === "clone" || activeTool === "heal" || (activeTool === "eraser" && isErasingPixelsRef.current)) && canvasRef.current) {
+        const newPngUrl = canvasRef.current.toDataURL("image/png");
+        setImageSrc(newPngUrl);
+        if (cachedImageRef.current) {
+          cachedImageRef.current.src = newPngUrl;
+        }
       }
-      setStatus(activeTool === "eraser" ? "تم المسح بنجاح" : activeTool === "clone" ? "تم تثبيت ختم الاستنساخ" : activeTool === "heal" ? "تم تثبيت المعالجة" : "تم تثبيت الرسم");
+      isErasingPixelsRef.current = false;
+      setStatus(activeTool === "eraser" ? (currentLang === "ar" ? "تم المسح وتثبيت البكسلات بنجاح" : "Erased successfully") : activeTool === "clone" ? "تم تثبيت ختم الاستنساخ" : activeTool === "heal" ? "تم تثبيت المعالجة" : "تم تثبيت الرسم");
     }
   };
 
   const activateTool = (toolId: string) => {
     setActiveTool(toolId);
-    if (toolId === "clone" || toolId === "heal" || toolId === "adjust" || toolId === "crop" || toolId === "shape" || toolId === "text" || toolId === "select" || toolId === "brush" || toolId === "pencil" || toolId === "bucket") {
+    if (toolId === "clone" || toolId === "heal" || toolId === "adjust" || toolId === "crop" || toolId === "shape" || toolId === "text" || toolId === "select" || toolId === "brush" || toolId === "pencil" || toolId === "bucket" || toolId === "eraser") {
       setActiveTab("properties");
       if (!isInspectorOpen) setIsInspectorOpen(true);
-    }
-    if (toolId === "eraser") {
-      const currentLayer = layers.find((l) => l.id === selectedLayer);
-      if (!currentLayer || (currentLayer.kind !== "paint" && currentLayer.kind !== "text")) {
-        const paintLayer = layers.find((l) => l.kind === "paint");
-        if (paintLayer) {
-          setSelectedLayer(paintLayer.id);
-        } else {
-          ensurePaintLayer();
-        }
-      }
     }
     if (toolId === "magic") {
       setActiveTab("properties");
@@ -4019,6 +4084,110 @@ export default function Home() {
           </nav>
 
           <div className="command-actions">
+            {/* Quick Action Studio Pills */}
+            <button
+              onClick={() => setIsTemplatesModalOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 10px",
+                background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(59,130,246,0.18))",
+                border: "1px solid rgba(6,182,212,0.4)",
+                borderRadius: "6px",
+                color: "#38bdf8",
+                fontSize: "11.5px",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+              title={currentLang === "ar" ? "مشروع جديد واختيار قوالب جاهزة" : "New Project & Templates"}
+            >
+              ✨ {currentLang === "ar" ? "مشروع جديد" : "New Project"}
+            </button>
+
+            <button
+              onClick={() => setIsBlendModalOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 10px",
+                background: "linear-gradient(135deg, rgba(168,85,247,0.18), rgba(236,72,153,0.18))",
+                border: "1px solid rgba(168,85,247,0.4)",
+                borderRadius: "6px",
+                color: "#c084fc",
+                fontSize: "11.5px",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+              title={currentLang === "ar" ? "استوديو دمج صورتين باحترافية" : "Two-Image Blend Studio"}
+            >
+              🖼️ {currentLang === "ar" ? "دمج صورتين" : "Blend Images"}
+            </button>
+
+            <button
+              onClick={() => setIsProductBgModalOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 10px",
+                background: "linear-gradient(135deg, rgba(245,158,11,0.18), rgba(234,88,12,0.18))",
+                border: "1px solid rgba(245,158,11,0.4)",
+                borderRadius: "6px",
+                color: "#fbbf24",
+                fontSize: "11.5px",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+              title={currentLang === "ar" ? "مكتبة خلفيات المنتجات واستوديو التصوير" : "Product Showcase Backgrounds"}
+            >
+              🎨 {currentLang === "ar" ? "خلفيات الاستوديو" : "Studio BG"}
+            </button>
+
+            {/* Language Toggle */}
+            <button
+              onClick={() => {
+                const nextLang = currentLang === "ar" ? "en" : "ar";
+                setCurrentLang(nextLang);
+                setStatus(nextLang === "ar" ? "تم تحويل اللغة إلى العربية" : "Switched to English");
+              }}
+              style={{
+                padding: "5px 9px",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: "6px",
+                color: "#94a3b8",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+              title={currentLang === "ar" ? "Switch to English" : "التحويل للعربية"}
+            >
+              🌐 {currentLang === "ar" ? "EN" : "عربي"}
+            </button>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={() => {
+                const nextTheme = currentTheme === "dark" ? "light" : "dark";
+                setCurrentTheme(nextTheme);
+                document.documentElement.classList.toggle("light-theme", nextTheme === "light");
+              }}
+              style={{
+                padding: "5px 8px",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: "6px",
+                color: currentTheme === "dark" ? "#fbbf24" : "#0f172a",
+                fontSize: "12px",
+                cursor: "pointer"
+              }}
+              title={currentTheme === "dark" ? "التحويل للوضع النهاري" : "Switch to Dark Mode"}
+            >
+              {currentTheme === "dark" ? "☀️" : "🌙"}
+            </button>
+
             <button className="save-state save-action" onClick={saveProject} data-testid="save-project">
               <span className="save-dot" /> {isRendering ? "جارٍ المعالجة..." : "حفظ المشروع"}
             </button>
@@ -4080,6 +4249,223 @@ export default function Home() {
             <div className="avatar" title="محرر الصور الجامعي">AR</div>
           </div>
         </header>
+
+        {/* Contextual Tool Options Bar (Photoshop / Figma Style) */}
+        <div
+          className="tool-options-bar"
+          style={{
+            height: "40px",
+            background: currentTheme === "dark" ? "#121b1b" : "#f8fafc",
+            borderBottom: currentTheme === "dark" ? "1px solid rgba(45,212,191,0.2)" : "1px solid #cbd5e1",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 16px",
+            gap: "14px",
+            fontSize: "12px",
+            color: currentTheme === "dark" ? "#e2e8f0" : "#0f172a",
+            zIndex: 30,
+            overflowX: "auto",
+            whiteSpace: "nowrap"
+          }}
+        >
+          {/* Tool Identifier */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#2dd4bf" }}>
+            <span style={{ fontSize: "14px" }}>
+              {activeTool === "eraser" ? "🧹" : activeTool === "brush" ? "🖌️" : activeTool === "crop" ? "✂️" : activeTool === "select" ? "↖️" : activeTool === "shape" ? "🔷" : activeTool === "text" ? "✍️" : activeTool === "clone" ? "🩹" : "⚙️"}
+            </span>
+            <span>
+              {toolGroups.flat().find((t) => t.id === activeTool)?.label || activeTool}
+            </span>
+          </div>
+
+          <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.15)" }} />
+
+          {/* Options for ERASER */}
+          {activeTool === "eraser" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الوضع:" : "Mode:"}</span>
+                <div style={{ display: "flex", background: "rgba(0,0,0,0.25)", padding: "2px", borderRadius: "6px", gap: "2px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setEraserMode("pixels")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: eraserMode === "pixels" ? 700 : 400,
+                      background: eraserMode === "pixels" ? "#f43f5e" : "transparent",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {currentLang === "ar" ? "بكسلات الصورة (Alpha 0)" : "Image Pixels"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEraserMode("paint")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: eraserMode === "paint" ? 700 : 400,
+                      background: eraserMode === "paint" ? "#f43f5e" : "transparent",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {currentLang === "ar" ? "طبقة الرسم" : "Paint Strokes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEraserMode("magic")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                      fontWeight: eraserMode === "magic" ? 700 : 400,
+                      background: eraserMode === "magic" ? "#8b5cf6" : "transparent",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {currentLang === "ar" ? "✨ محو ذكي بالألوان" : "Magic Flood"}
+                  </button>
+                </div>
+              </div>
+
+              {eraserMode !== "magic" ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
+                    <input
+                      type="range"
+                      min={2}
+                      max={250}
+                      value={brushSize}
+                      onChange={(e) => setBrushSize(Number(e.target.value))}
+                      style={{ width: "80px", accentColor: "#f43f5e" }}
+                    />
+                    <span style={{ fontSize: "11px", minWidth: "32px", fontFamily: "monospace" }}>{brushSize}px</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الصلابة:" : "Hardness:"}</span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      value={brushHardness}
+                      onChange={(e) => setBrushHardness(Number(e.target.value))}
+                      style={{ width: "70px", accentColor: "#f43f5e" }}
+                    />
+                    <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{brushHardness}%</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "حساسية التسامح:" : "Tolerance:"}</span>
+                    <input
+                      type="range"
+                      min={5}
+                      max={120}
+                      value={magicEraserTolerance}
+                      onChange={(e) => setMagicEraserTolerance(Number(e.target.value))}
+                      style={{ width: "80px", accentColor: "#8b5cf6" }}
+                    />
+                    <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{magicEraserTolerance}</span>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={magicEraserContiguous}
+                      onChange={(e) => setMagicEraserContiguous(e.target.checked)}
+                      style={{ accentColor: "#8b5cf6" }}
+                    />
+                    <span>{currentLang === "ar" ? "بكسلات متصلة فقط" : "Contiguous Only"}</span>
+                  </label>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Options for BRUSH or PENCIL */}
+          {(activeTool === "brush" || activeTool === "pencil") && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={200}
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  style={{ width: "80px", accentColor: "#2dd4bf" }}
+                />
+                <span style={{ fontSize: "11px", minWidth: "32px", fontFamily: "monospace" }}>{brushSize}px</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الشفافية:" : "Opacity:"}</span>
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  value={brushOpacity}
+                  onChange={(e) => setBrushOpacity(Number(e.target.value))}
+                  style={{ width: "70px", accentColor: "#2dd4bf" }}
+                />
+                <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{brushOpacity}%</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "اللون:" : "Color:"}</span>
+                <input
+                  type="color"
+                  value={foregroundColor}
+                  onChange={(e) => setForegroundColor(e.target.value)}
+                  style={{ width: "24px", height: "24px", padding: 0, border: "none", borderRadius: "4px", cursor: "pointer", background: "transparent" }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Options for CROP */}
+          {activeTool === "crop" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={cropToSelection}
+                style={{ padding: "4px 12px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, background: "#10b981", color: "#fff", border: "none", cursor: "pointer" }}
+              >
+                ✓ {currentLang === "ar" ? "تطبيق القص للمنطقة المحددة" : "Apply Crop"}
+              </button>
+            </div>
+          )}
+
+          {/* Options for RETOUCH (CLONE / HEAL) */}
+          {(activeTool === "clone" || activeTool === "heal") && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "نصف القطر:" : "Radius:"}</span>
+                <input
+                  type="range"
+                  min={5}
+                  max={100}
+                  value={retouchRadius}
+                  onChange={(e) => setRetouchRadius(Number(e.target.value))}
+                  style={{ width: "80px", accentColor: "#38bdf8" }}
+                />
+                <span style={{ fontSize: "11px", minWidth: "30px", fontFamily: "monospace" }}>{retouchRadius}px</span>
+              </div>
+              <span style={{ fontSize: "10px", color: "#38bdf8" }}>
+                {currentLang === "ar" ? "💡 اضغط Alt + نقر لتحديد نقطة المصدر" : "💡 Alt + click to set source point"}
+              </span>
+            </div>
+          )}
+        </div>
 
         <section className={`workspace-grid ${!isInspectorOpen ? "inspector-closed" : ""}`}>
           <aside className="tool-rail" aria-label="شريط الأدوات" style={{ display: "flex", flexDirection: "column", overflow: "hidden", padding: 0 }}>
@@ -4367,24 +4753,36 @@ export default function Home() {
                     }
                   }}
                 />
-                {mouseCoord && (activeTool === "eraser" || activeTool === "brush") && (
+                {mouseCoord && (activeTool === "eraser" || activeTool === "brush" || activeTool === "pencil" || activeTool === "clone" || activeTool === "heal") && (
                   <div
                     className="canvas-brush-cursor"
                     style={{
                       position: "absolute",
                       left: `${(mouseCoord.x / Math.max(1, canvasRef.current?.width || 1)) * 100}%`,
                       top: `${(mouseCoord.y / Math.max(1, canvasRef.current?.height || 1)) * 100}%`,
-                      width: `${((activeTool === "eraser" ? Math.max(20, brushSize) : Math.max(4, brushSize)) / Math.max(1, canvasRef.current?.width || 1)) * 100}%`,
-                      height: `${((activeTool === "eraser" ? Math.max(20, brushSize) : Math.max(4, brushSize)) / Math.max(1, canvasRef.current?.height || 1)) * 100}%`,
+                      width: `${Math.max(8, (activeTool === "clone" || activeTool === "heal" ? retouchRadius * 2 : brushSize) / Math.max(1, canvasRef.current?.width || 1) * (canvasRef.current?.clientWidth || 300))}px`,
+                      height: `${Math.max(8, (activeTool === "clone" || activeTool === "heal" ? retouchRadius * 2 : brushSize) / Math.max(1, canvasRef.current?.width || 1) * (canvasRef.current?.clientWidth || 300))}px`,
                       transform: "translate(-50%, -50%)",
                       borderRadius: "50%",
-                      border: activeTool === "eraser" ? "2px dashed #f43f5e" : `2px solid ${foregroundColor}`,
-                      backgroundColor: activeTool === "eraser" ? "rgba(244, 63, 94, 0.14)" : `${foregroundColor}22`,
+                      border: activeTool === "eraser" ? "2px dashed #f43f5e" : activeTool === "clone" || activeTool === "heal" ? "2px dashed #38bdf8" : `2px solid ${foregroundColor}`,
+                      backgroundColor: activeTool === "eraser" ? "rgba(244, 63, 94, 0.16)" : activeTool === "clone" || activeTool === "heal" ? "rgba(56, 189, 248, 0.16)" : `${foregroundColor}22`,
                       pointerEvents: "none",
-                      zIndex: 10,
-                      boxShadow: "0 0 4px rgba(0,0,0,0.5)"
+                      zIndex: 20,
+                      boxShadow: "0 0 6px rgba(0,0,0,0.6)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        width: "3px",
+                        height: "3px",
+                        borderRadius: "50%",
+                        backgroundColor: activeTool === "eraser" ? "#f43f5e" : activeTool === "clone" || activeTool === "heal" ? "#38bdf8" : foregroundColor,
+                      }}
+                    />
+                  </div>
                 )}
                 <div className="selection-frame">
                   <span className="frame-label">{toolGroups.flat().find((tool) => tool.id === activeTool)?.label ?? activeTool} / نشط</span>
@@ -6260,6 +6658,103 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Studio Modal 1: Product Showcase Backgrounds */}
+        <ProductBackgroundsModal
+          isOpen={isProductBgModalOpen}
+          onClose={() => setIsProductBgModalOpen(false)}
+          lang={currentLang}
+          currentCanvasWidth={imageSize.width}
+          currentCanvasHeight={imageSize.height}
+          onApplyBackground={(bgUrl, options) => {
+            if (options.asLayer) {
+              const newLayerId = `layer-bg-${Date.now()}`;
+              setLayers((prev) => [
+                ...prev,
+                {
+                  id: newLayerId,
+                  name: currentLang === "ar" ? "خلفية استوديو إجرائية" : "Studio Background",
+                  kind: "image",
+                  visible: true,
+                  opacity: 100,
+                  blendMode: "normal",
+                  color: "#eab308"
+                }
+              ]);
+            }
+            setHasCustomBackground(true);
+            setImageSrc(bgUrl);
+            setStatus(currentLang === "ar" ? "تم تطبيق خلفية الاستوديو بنجاح" : "Studio background applied successfully");
+          }}
+        />
+
+        {/* Studio Modal 2: Templates & New Project */}
+        <TemplatesModal
+          isOpen={isTemplatesModalOpen}
+          onClose={() => setIsTemplatesModalOpen(false)}
+          lang={currentLang}
+          onCreateNewProject={({ width, height, background, templateName }) => {
+            setImageSize({ width, height });
+            const off = document.createElement("canvas");
+            off.width = width;
+            off.height = height;
+            const ctx = off.getContext("2d");
+            if (ctx) {
+              if (background === "white") {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, width, height);
+              } else if (background === "black") {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, width, height);
+              } else if (background !== "transparent") {
+                ctx.fillStyle = background;
+                ctx.fillRect(0, 0, width, height);
+              }
+            }
+            const freshUrl = off.toDataURL("image/png");
+            setImageSrc(freshUrl);
+            setFloatingSubject(null);
+            setStrokes([]);
+            setShapes([]);
+            setTextElements([]);
+            setLayers([
+              { id: "color", name: "تعديل لوني", kind: "adjustment", color: "#2dd4bf", visible: true, opacity: 100, blendMode: "normal" },
+              { id: "portrait", name: templateName || (currentLang === "ar" ? "مشروع جديد" : "New Canvas"), kind: "image", color: "#d7b58a", visible: true, opacity: 100, blendMode: "normal" },
+              { id: "background", name: "الخلفية", kind: "background", color: "#8d8b87", visible: true, opacity: 100, blendMode: "normal" },
+            ]);
+            setSelectedLayer("portrait");
+            setTimeout(fitToScreen, 100);
+            setStatus(currentLang === "ar" ? `تم إنشاء مشروع جديد: ${templateName || "مخصص"} (${width}×${height})` : `Created canvas: ${templateName || "Custom"} (${width}×${height})`);
+          }}
+        />
+
+        {/* Studio Modal 3: Two-Image Blend Studio */}
+        <BlendModal
+          isOpen={isBlendModalOpen}
+          onClose={() => setIsBlendModalOpen(false)}
+          baseImageSrc={imageSrc}
+          isArabic={currentLang === "ar"}
+          onApplyBlend={(blendedDataUrl: string, asNewLayer: boolean, blendMode: string, opacity: number) => {
+            if (asNewLayer) {
+              const newLayerId = `layer-blend-${Date.now()}`;
+              setLayers((prev) => [
+                ...prev,
+                {
+                  id: newLayerId,
+                  name: currentLang === "ar" ? "طبقة دمج الصور" : "Blended Layer",
+                  kind: "image",
+                  visible: true,
+                  opacity,
+                  blendMode: blendMode as any,
+                  color: "#a855f7"
+                }
+              ]);
+            }
+            setImageSrc(blendedDataUrl);
+            if (cachedImageRef.current) cachedImageRef.current.src = blendedDataUrl;
+            setStatus(currentLang === "ar" ? "تم تثبيت دمج الصورتين على مساحة العمل بنجاح" : "Two-image blend applied to canvas");
+          }}
+        />
       </main>
     </TooltipProvider>
   );

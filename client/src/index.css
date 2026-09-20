@@ -1154,3 +1154,82 @@
 
 .layer-thumb.target-active, .layer-thumb.mask-thumb.target-active { outline: 2px solid #14b8a6; outline-offset: 1px; }
 .layer-thumb.mask-thumb { border-radius: 4px; }
+
+/* ─── Light Theme Overrides ─── */
+html.light-theme {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --text-primary: #0f172a;
+  --border-color: #cbd5e1;
+}
+
+html.light-theme .app-shell {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+html.light-theme .editor-header {
+  background: #ffffff;
+  border-bottom-color: #e2e8f0;
+  color: #0f172a;
+}
+
+html.light-theme .tool-rail {
+  background: #f1f5f9;
+  border-left-color: #e2e8f0;
+}
+
+html.light-theme .tool-button {
+  color: #475569;
+}
+
+html.light-theme .tool-button:hover,
+html.light-theme .tool-button.active {
+  background: #e2e8f0;
+  color: #0d9488;
+}
+
+html.light-theme .inspector-rail {
+  background: #ffffff;
+  border-right-color: #e2e8f0;
+  color: #0f172a;
+}
+
+html.light-theme .inspector-tabs {
+  background: #f1f5f9;
+  border-bottom-color: #e2e8f0;
+}
+
+html.light-theme .inspector-tabs button {
+  color: #64748b;
+}
+
+html.light-theme .inspector-tabs button.active {
+  color: #0d9488;
+  border-bottom-color: #0d9488;
+}
+
+html.light-theme .canvas-stage {
+  background: #e2e8f0;
+}
+
+html.light-theme .app-footer,
+html.light-theme .canvas-status {
+  background: #f8fafc;
+  border-top-color: #e2e8f0;
+  color: #64748b;
+}
+
+/* ─── Tool Options Bar ─── */
+.tool-options-bar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(45, 212, 191, 0.3) transparent;
+}
+.tool-options-bar::-webkit-scrollbar {
+  height: 4px;
+}
+.tool-options-bar::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.3);
+  border-radius: 4px;
+}
+

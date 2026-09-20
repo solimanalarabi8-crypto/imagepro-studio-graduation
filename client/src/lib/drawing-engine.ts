@@ -336,3 +336,95 @@ export function applyFloodFill(
   context.putImageData(imgData, 0, 0);
   return true;
 }
+
+/**
+ * Fast Magic Eraser algorithm: Erases contiguous matching color pixels to 100% transparency (Alpha 0)
+ */
+export function applyMagicEraser(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  startX: number,
+  startY: number,
+  tolerance: number = 32,
+  contiguous: boolean = true
+): boolean {
+  if (startX < 0 || startX >= width || startY < 0 || startY >= height) return false;
+
+  const imgData = context.getImageData(0, 0, width, height);
+  const data = imgData.data;
+
+  const startIndex = (startY * width + startX) * 4;
+  const startR = data[startIndex];
+  const startG = data[startIndex + 1];
+  const startB = data[startIndex + 2];
+  const startA = data[startIndex + 3];
+
+  if (startA === 0) return false;
+
+  const matchesTarget = (idx: number) => {
+    return (
+      Math.abs(data[idx] - startR) <= tolerance &&
+      Math.abs(data[idx + 1] - startG) <= tolerance &&
+      Math.abs(data[idx + 2] - startB) <= tolerance &&
+      Math.abs(data[idx + 3] - startA) <= tolerance
+    );
+  };
+
+  if (!contiguous) {
+    const totalPixels = width * height;
+    for (let i = 0; i < totalPixels; i++) {
+      if (matchesTarget(i * 4)) {
+        data[i * 4 + 3] = 0;
+      }
+    }
+    context.putImageData(imgData, 0, 0);
+    return true;
+  }
+
+  const visited = new Uint8Array(width * height);
+  const queueX = new Int32Array(width * height);
+  const queueY = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+
+  queueX[tail] = startX;
+  queueY[tail] = startY;
+  tail++;
+  visited[startY * width + startX] = 1;
+
+  while (head < tail) {
+    const cx = queueX[head];
+    const cy = queueY[head];
+    head++;
+
+    const pixelIdx = (cy * width + cx) * 4;
+    data[pixelIdx + 3] = 0;
+
+    const neighbors = [
+      [cx + 1, cy],
+      [cx - 1, cy],
+      [cx, cy + 1],
+      [cx, cy - 1],
+    ];
+
+    for (let i = 0; i < 4; i++) {
+      const nx = neighbors[i][0];
+      const ny = neighbors[i][1];
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        const nIndex = ny * width + nx;
+        if (!visited[nIndex]) {
+          visited[nIndex] = 1;
+          if (matchesTarget(nIndex * 4)) {
+            queueX[tail] = nx;
+            queueY[tail] = ny;
+            tail++;
+          }
+        }
+      }
+    }
+  }
+
+  context.putImageData(imgData, 0, 0);
+  return true;
+}
