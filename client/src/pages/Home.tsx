@@ -28,6 +28,7 @@ import {
   PaintBucket, PanelRight, PanelRightClose, Pencil, Plus, Redo2, RefreshCw, RotateCcw, RotateCw, Save, Scale, Settings2,
   SlidersHorizontal, Sparkles, Square, Stamp, CircleDot, Crosshair, SunMedium, TextCursorInput, Triangle, Type, Undo2, Upload, WandSparkles, X, ZoomIn,
   ChevronsDown, ChevronsUp, Copy, Trash2, FlipHorizontal, FlipVertical,
+  AlignLeft, AlignCenter, AlignRight, Magnet, Ruler,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -61,6 +62,7 @@ import {
   cleanMaskNoise,
 } from "@/lib/subject-extractor";
 import UserGuide from "@/components/UserGuide";
+import { calculateSnap, calculateAlignment, type GuideLine, type SnapLine, type AlignmentType } from "@/lib/guides-snap-engine";
 
 /** ImagePro Studio — charcoal + signal teal. Phase 1, 2, 3, 5, 6 & 7: Professional Digital Art & Image Processing Studio. */
 
@@ -571,6 +573,14 @@ export default function Home() {
     initialRotation: number;
     aspectRatio: number;
   } | null>(null);
+
+  // Section 15 & 16: Guides, Rulers, Snap & Alignment State
+  const [showRulers, setShowRulers] = useState<boolean>(true);
+  const [showGuides, setShowGuides] = useState<boolean>(true);
+  const [snapEnabled, setSnapEnabled] = useState<boolean>(true);
+  const [guides, setGuides] = useState<GuideLine[]>([]);
+  const [activeSnapLines, setActiveSnapLines] = useState<SnapLine[]>([]);
+  const isDraggingGuideRef = useRef<{ id?: string; orientation: "horizontal" | "vertical"; isNew: boolean } | null>(null);
 
   // Phase 13: AI & Advanced Features State
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -2310,8 +2320,23 @@ export default function Home() {
     const dy = canvasPointerY - startY;
 
     if (activeTransformHandle === "move") {
-      const nx = Math.round(initialX + dx);
-      const ny = Math.round(initialY + dy);
+      let nx = Math.round(initialX + dx);
+      let ny = Math.round(initialY + dy);
+
+      if (snapEnabled && canvasRef.current) {
+        const snapRes = calculateSnap(
+          { x: nx, y: ny, width: initialWidth, height: initialHeight },
+          { width: canvasRef.current.width, height: canvasRef.current.height },
+          showGuides ? guides : [],
+          { threshold: 10, snapToCenter: true, snapToEdges: true, snapToGuides: showGuides, snapToGrid: showGrid, gridSize: 40 }
+        );
+        nx = snapRes.x;
+        ny = snapRes.y;
+        setActiveSnapLines(snapRes.activeSnapLines);
+      } else {
+        if (activeSnapLines.length > 0) setActiveSnapLines([]);
+      }
+
       floatingSubjectPosRef.current = { x: nx, y: ny };
       setFloatingSubject((prev) => (prev ? { ...prev, x: nx, y: ny } : null));
       if (!dragRafIdRef.current) {
@@ -2409,9 +2434,113 @@ export default function Home() {
       } catch {}
       setActiveTransformHandle(null);
       transformStartRef.current = null;
+      setActiveSnapLines([]);
       if (floatingSubject) {
         setStatus(`📐 تم ضبط تحويل العنصر (${Math.round(floatingSubject.width)}×${Math.round(floatingSubject.height)} بكسل، تدوير ${Math.round(floatingSubject.rotation || 0)}°)`);
       }
+    }
+  };
+
+  /**
+   * Section 15 & 16: Interactive Rulers, Guides, & Alignment Handlers
+   */
+  const handleRulerMouseDown = (orientation: "horizontal" | "vertical", e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const pos = orientation === "horizontal"
+      ? (e.clientY - bounds.top) * (canvas.height / bounds.height)
+      : (e.clientX - bounds.left) * (canvas.width / bounds.width);
+
+    const newGuide: GuideLine = {
+      id: `guide-${Date.now()}`,
+      orientation,
+      position: Math.round(Math.max(10, pos)),
+    };
+    setGuides((prev) => [...prev, newGuide]);
+    setShowGuides(true);
+    isDraggingGuideRef.current = { id: newGuide.id, orientation, isNew: true };
+    setStatus(orientation === "horizontal" ? "اسحب لأسفل لضبط موضع الدليل الأفقي" : "اسحب لليمين لضبط موضع الدليل الرأسي");
+  };
+
+  const handleGuideDrag = (id: string, e: React.PointerEvent) => {
+    e.stopPropagation();
+    const target = guides.find((g) => g.id === id);
+    if (!target) return;
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    isDraggingGuideRef.current = { id, orientation: target.orientation, isNew: false };
+  };
+
+  const handleGuidePointerMove = (id: string, e: React.PointerEvent) => {
+    if (!isDraggingGuideRef.current || isDraggingGuideRef.current.id !== id) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const orientation = isDraggingGuideRef.current.orientation;
+
+    const pos = orientation === "horizontal"
+      ? Math.round((e.clientY - bounds.top) * (canvas.height / bounds.height))
+      : Math.round((e.clientX - bounds.left) * (canvas.width / bounds.width));
+
+    setGuides((prev) => prev.map((g) => (g.id === id ? { ...g, position: pos } : g)));
+  };
+
+  const handleGuidePointerUp = (id: string, e: React.PointerEvent) => {
+    if (isDraggingGuideRef.current && isDraggingGuideRef.current.id === id) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      isDraggingGuideRef.current = null;
+      setStatus("تم تثبيت موضع الخط الإرشادي");
+    }
+  };
+
+  const handleRemoveGuide = (id: string) => {
+    setGuides((prev) => prev.filter((g) => g.id !== id));
+    setStatus("تم حذف الخط الإرشادي");
+  };
+
+  const handleApplyAlignment = (type: AlignmentType) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const canvasSize = { width: canvas.width, height: canvas.height };
+
+    if (floatingSubject) {
+      const newPos = calculateAlignment(type, floatingSubject, canvasSize);
+      floatingSubjectPosRef.current = newPos;
+      setFloatingSubject((prev) => (prev ? { ...prev, ...newPos } : null));
+      fastRenderFloatingSubject();
+      const labels: Record<AlignmentType, string> = {
+        left: "اليسار",
+        "center-h": "المنتصف الأفقي",
+        right: "اليمين",
+        top: "الأعلى",
+        "center-v": "المنتصف الرأسي",
+        bottom: "الأسفل",
+      };
+      setStatus(`🎯 تم محاذاة العنصر المعزول إلى [${labels[type]}]`);
+      return;
+    }
+
+    const selLayer = layers.find((l) => l.id === selectedLayer);
+    if (!selLayer) return;
+
+    if (selLayer.kind === "text") {
+      setTextElements((prev) =>
+        prev.map((t) => {
+          if (t.id === selectedLayer) {
+            const newPos = calculateAlignment(type, { x: t.x, y: t.y, width: t.size * (t.text.length * 0.6), height: t.size }, canvasSize);
+            return { ...t, ...newPos };
+          }
+          return t;
+        })
+      );
+      setStatus(`🎯 تم محاذاة النص على مساحة العمل`);
+    } else {
+      setStatus(`تم تطبيق المحاذاة على الطبقة: ${selLayer.name}`);
     }
   };
 
@@ -4290,6 +4419,23 @@ export default function Home() {
                     <span className="app-menu-item-left"><Grid size={14} /> {showGrid ? "إخفاء شبكة المحاذاة" : "إظهار شبكة المحاذاة"}</span>
                     <span className="app-menu-badge">{showGrid ? "✓" : ""}</span>
                   </button>
+                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowRulers(!showRulers); setStatus(showRulers ? "تم إخفاء المساطر" : "تم إظهار مساطر الأبعاد (Rulers)"); }}>
+                    <span className="app-menu-item-left"><Ruler size={14} /> {showRulers ? "إخفاء المساطر" : "إظهار مساطر الأبعاد (Rulers)"}</span>
+                    <span className="app-menu-badge">{showRulers ? "✓" : ""}</span>
+                  </button>
+                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowGuides(!showGuides); setStatus(showGuides ? "تم إخفاء الخطوط الإرشادية" : "تم إظهار الخطوط الإرشادية (Guides)"); }}>
+                    <span className="app-menu-item-left">📐 {showGuides ? "إخفاء الخطوط الإرشادية" : "إظهار الخطوط الإرشادية"}</span>
+                    <span className="app-menu-badge">{showGuides ? "✓" : ""}</span>
+                  </button>
+                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setSnapEnabled(!snapEnabled); setStatus(snapEnabled ? "تم إيقاف الالتصاق الذكي" : "تم تفعيل الالتصاق الذكي (Smart Snap)"); }}>
+                    <span className="app-menu-item-left"><Magnet size={14} /> الالتصاق الذكي (Smart Snap)</span>
+                    <span className="app-menu-badge">{snapEnabled ? "✓" : ""}</span>
+                  </button>
+                  {guides.length > 0 && (
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setGuides([]); setStatus("تم مسح كافة الخطوط الإرشادية"); }}>
+                      <span className="app-menu-item-left">🗑️ مسح الخطوط الإرشادية ({guides.length})</span>
+                    </button>
+                  )}
                   <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsInspectorOpen(!isInspectorOpen); setStatus(isInspectorOpen ? "تم طي لوحة الخصائص" : "تم إظهار لوحة الخصائص"); }}>
                     <span className="app-menu-item-left"><PanelRight size={14} /> {isInspectorOpen ? "طي اللوحة الجانبية" : "إظهار اللوحة الجانبية"}</span>
                     <span className="app-menu-badge">{isInspectorOpen ? "✓" : ""}</span>
@@ -4697,6 +4843,32 @@ export default function Home() {
                   </button>
                 </>
               )}
+
+              <div className="tool-bar-separator" />
+              <div className="align-group-pill" title="محاذاة العناصر على مساحة العمل">
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("left")} title="محاذاة لليسار"><AlignLeft size={13} /></button>
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("center-h")} title="محاذاة أفقية للوسط"><AlignCenter size={13} /></button>
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("right")} title="محاذاة لليمين"><AlignRight size={13} /></button>
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("top")} title="محاذاة للأعلى">⤒</button>
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("center-v")} title="محاذاة رأسية للوسط">↕</button>
+                <button type="button" className="align-btn" onClick={() => handleApplyAlignment("bottom")} title="محاذاة للأسفل">⤓</button>
+              </div>
+
+              <div className="tool-bar-separator" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSnapEnabled(!snapEnabled);
+                  setStatus(snapEnabled ? "تم إيقاف الالتصاق الذكي (Snap)" : "تم تفعيل الالتصاق الذكي (Snap) للمنتصف والحواف والأدلة");
+                }}
+                className={`studio-pill studio-pill-neutral ${snapEnabled ? "is-active" : ""}`}
+                style={{ padding: "3px 8px", fontSize: "10px", display: "flex", alignItems: "center", gap: "4px" }}
+                title="الالتصاق المغناطيسي الذكي (Smart Magnetic Snap)"
+              >
+                <Magnet size={12} style={{ color: snapEnabled ? "#ec4899" : "inherit" }} />
+                <span>{snapEnabled ? "الالتصاق: مفعّل" : "الالتصاق: متوقف"}</span>
+              </button>
             </div>
           )}
 
@@ -5091,7 +5263,98 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                {/* Section 15: Grid Overlay */}
+                {showGrid && (
+                  <div
+                    className="canvas-grid-overlay"
+                    style={{
+                      backgroundImage: "linear-gradient(to right, rgba(45,212,191,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(45,212,191,0.18) 1px, transparent 1px)",
+                      backgroundSize: "40px 40px"
+                    }}
+                  />
+                )}
+
+                {/* Section 15: Interactive Guides */}
+                {showGuides && guides.map((guide) => (
+                  <div
+                    key={guide.id}
+                    className={guide.orientation === "horizontal" ? "guide-line-h" : "guide-line-v"}
+                    style={guide.orientation === "horizontal"
+                      ? { top: `${(guide.position / Math.max(1, canvasRef.current?.height || 1)) * 100}%` }
+                      : { left: `${(guide.position / Math.max(1, canvasRef.current?.width || 1)) * 100}%` }
+                    }
+                    onPointerDown={(e) => handleGuideDrag(guide.id, e)}
+                    onPointerMove={(e) => handleGuidePointerMove(guide.id, e)}
+                    onPointerUp={(e) => handleGuidePointerUp(guide.id, e)}
+                    onDoubleClick={() => handleRemoveGuide(guide.id)}
+                    title="اسحب لتعديل الموضع، أو انقر نقراً مزدوجاً للحذف"
+                  >
+                    <span className="guide-pill">{Math.round(guide.position)}px</span>
+                  </div>
+                ))}
+
+                {/* Section 15: Smart Snap Visual Indicators */}
+                {activeSnapLines.map((snap, idx) => (
+                  snap.orientation === "vertical" ? (
+                    <div
+                      key={`snap-v-${idx}`}
+                      className="snap-indicator-line-v"
+                      style={{ left: `${(snap.position / Math.max(1, canvasRef.current?.width || 1)) * 100}%` }}
+                    />
+                  ) : (
+                    <div
+                      key={`snap-h-${idx}`}
+                      className="snap-indicator-line-h"
+                      style={{ top: `${(snap.position / Math.max(1, canvasRef.current?.height || 1)) * 100}%` }}
+                    />
+                  )
+                ))}
               </div>
+
+              {/* Section 15: Top & Left Rulers */}
+              {showRulers && (
+                <>
+                  <div className="canvas-ruler-corner" title="وحدة القياس: بكسل (px)">px</div>
+                  <div
+                    className="canvas-ruler-top"
+                    onMouseDown={(e) => handleRulerMouseDown("horizontal", e)}
+                    title="مسطرة الأبعاد العلوية (بكسل) — انقر واسحب لأسفل لإنشاء خط إرشادي"
+                  >
+                    <svg width="100%" height="20" style={{ display: "block", overflow: "visible" }}>
+                      {Array.from({ length: 40 }).map((_, i) => {
+                        const val = i * 100;
+                        const xPos = (val * (zoom / 100)) + pan.x + (canvasStageRef.current ? canvasStageRef.current.clientWidth / 2 - (imageSize.width * (zoom / 100)) / 2 : 100);
+                        return (
+                          <g key={i}>
+                            <line x1={xPos} y1={12} x2={xPos} y2={20} stroke="rgba(255,255,255,0.4)" strokeWidth={1} />
+                            <text x={xPos + 3} y={11} fill="#64748b" fontSize={9} fontFamily="monospace">{val}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  <div
+                    className="canvas-ruler-left"
+                    onMouseDown={(e) => handleRulerMouseDown("vertical", e)}
+                    title="مسطرة الأبعاد الجانبية (بكسل) — انقر واسحب لليمين لإنشاء خط إرشادي"
+                  >
+                    <svg width="20" height="100%" style={{ display: "block", overflow: "visible" }}>
+                      {Array.from({ length: 30 }).map((_, i) => {
+                        const val = i * 100;
+                        const yPos = (val * (zoom / 100)) + pan.y + (canvasStageRef.current ? canvasStageRef.current.clientHeight / 2 - (imageSize.height * (zoom / 100)) / 2 : 100);
+                        return (
+                          <g key={i}>
+                            <line x1={12} y1={yPos} x2={20} y2={yPos} stroke="rgba(255,255,255,0.4)" strokeWidth={1} />
+                            <text x={2} y={yPos - 2} fill="#64748b" fontSize={8} fontFamily="monospace" transform={`rotate(-90 2 ${yPos - 2})`}>{val}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </>
+              )}
+
               <div className="canvas-crosshair" />
               <div className="canvas-badge" onClick={() => setFileInfoOpen(true)} style={{ cursor: "pointer" }} title="انقر لعرض تفاصيل المشروع">
                 RGB / 8 bit <span>•</span> {imageSize.width} × {imageSize.height}
