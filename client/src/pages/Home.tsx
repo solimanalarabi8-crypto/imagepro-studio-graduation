@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { blendModeToCompositeOp, opacityToAlpha, detectHistoryAction, BLEND_MODE_OPTIONS } from "@/lib/layers-history";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  blendModeToCompositeOp,
+  opacityToAlpha,
+  detectHistoryAction,
+  BLEND_MODE_OPTIONS,
+  type LayerInfo,
+  moveLayerToTop as moveLayerToTopHelper,
+  moveLayerToBottom as moveLayerToBottomHelper,
+  moveLayerUp as moveLayerUpHelper,
+  moveLayerDown as moveLayerDownHelper,
+  reorderLayers,
+  toggleLayerSolo as toggleLayerSoloHelper,
+  duplicateLayer as duplicateLayerHelper,
+} from "@/lib/layers-history";
 import { calculateHistogram, applyPixelAdjustments, DEFAULT_ADJUSTMENTS, type HistogramData } from "@/lib/color-adjustments";
 import { FILTER_CATALOG, executeFilter, type FilterMode, type FilterCategory } from "@/lib/filters-engine";
 import {
@@ -11,9 +24,10 @@ import {
 } from "@/lib/project-persistence";
 import {
   ArrowDown, ArrowUp, Brush, Check, ChevronDown, Circle, Cloud, Crop, Download, Eraser, Eye, EyeOff, FileDown, FilePlus,
-  FolderOpen, Grid, Hand, Image as ImageIcon, Info, Layers3, Lock, Unlock, Folder, Combine, Maximize2, Minimize2, Minus, MousePointer2,
+  FolderOpen, Grid, Hand, Image as ImageIcon, Info, Layers3, Lock, Unlock, Folder, Combine, Maximize2, Minimize2, Minus, MousePointer2, Move,
   PaintBucket, PanelRight, PanelRightClose, Pencil, Plus, Redo2, RefreshCw, RotateCcw, RotateCw, Save, Scale, Settings2,
   SlidersHorizontal, Sparkles, Square, Stamp, CircleDot, Crosshair, SunMedium, TextCursorInput, Triangle, Type, Undo2, Upload, WandSparkles, X, ZoomIn,
+  ChevronsDown, ChevronsUp, Copy, Trash2, FlipHorizontal, FlipVertical,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -39,7 +53,9 @@ import {
   extractSubjectFromCanvas,
   createPortraitBokeh,
   createBackgroundReplacement,
+  cleanMaskNoise,
 } from "@/lib/subject-extractor";
+import UserGuide from "@/components/UserGuide";
 
 /** ImagePro Studio — charcoal + signal teal. Phase 1, 2, 3, 5, 6 & 7: Professional Digital Art & Image Processing Studio. */
 
@@ -105,6 +121,16 @@ type TextElement = {
 };
 type SelectionRect = { x: number; y: number; width: number; height: number };
 type MaskRect = SelectionRect;
+export interface FloatingSubject {
+  id: string;
+  dataUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  naturalWidth: number;
+  naturalHeight: number;
+}
 type EditorSnapshot = {
   imageSrc: string;
   brightness: number;
@@ -138,8 +164,8 @@ type EditorSnapshot = {
 
 export const toolGroups: Tool[][] = [
   [
-    { id: "select", label: "تحديد", icon: MousePointer2, shortcut: "V" },
-    { id: "hand", label: "تحريك", icon: Hand, shortcut: "H" },
+    { id: "select", label: "تحريك وتحديد العنصر", icon: Move, shortcut: "V" },
+    { id: "hand", label: "تمرير مساحة العمل", icon: Hand, shortcut: "H" },
     { id: "crop", label: "قص", icon: Crop, shortcut: "C" },
   ],
   [
@@ -163,7 +189,6 @@ export const toolGroups: Tool[][] = [
   ],
 ];
 
-type LayerInfo = { id: string; name: string; kind: string; color: string; visible: boolean; opacity?: number; blendMode?: string; locked?: boolean; parentId?: string; thumbnail?: string; maskData?: string; maskEnabled?: boolean; maskLinked?: boolean; };
 type SavedProject = {
   imageData: string;
   imageName: string;
@@ -444,20 +469,20 @@ export default function Home() {
     { id: "initial-0", label: "فتح المشروع الأصلي", timestamp: Date.now() }
   ]);
   const [historyIndex, setHistoryIndex] = useState(0);
-  const [layers, setLayers] = useState(() => readSavedProject()?.layers ?? layerSeed);
+  const [layers, setLayers] = useState(layerSeed);
   const [selectedLayer, setSelectedLayer] = useState("portrait");
   const [selectedTarget, setSelectedTarget] = useState<"content" | "mask">("content");
-  const [imageSrc, setImageSrc] = useState(() => readSavedProject()?.imageData || sampleImages.portrait);
-  const [imageName, setImageName] = useState(() => readSavedProject()?.imageName || "دراسة بورتريه شخصي");
+  const [imageSrc, setImageSrc] = useState(sampleImages.portrait);
+  const [imageName, setImageName] = useState("دراسة بورتريه شخصي");
   const [sampleImageKey, setSampleImageKey] = useState<keyof typeof sampleImages>("portrait");
   const [imageSize, setImageSize] = useState({ width: 2048, height: 1536 });
-  const [zoom, setZoom] = useState(78);
-  const [brightness, setBrightness] = useState(() => readSavedProject()?.brightness ?? 12);
-  const [contrast, setContrast] = useState(() => readSavedProject()?.contrast ?? 6);
-  const [grayscale, setGrayscale] = useState(() => readSavedProject()?.grayscale ?? 0);
-  const [saturation, setSaturation] = useState<number>(() => readSavedProject()?.saturation ?? 100);
-  const [sepia, setSepia] = useState<number>(() => readSavedProject()?.sepia ?? 0);
-  const [invert, setInvert] = useState<number>(() => readSavedProject()?.invert ?? 0);
+  const [zoom, setZoom] = useState(100);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
+  const [grayscale, setGrayscale] = useState(0);
+  const [saturation, setSaturation] = useState<number>(100);
+  const [sepia, setSepia] = useState<number>(0);
+  const [invert, setInvert] = useState<number>(0);
   // Point 5: Extended Lighting, Color & Histogram State
   const [hue, setHue] = useState<number>(0);
   const [exposure, setExposure] = useState<number>(0);
@@ -467,24 +492,24 @@ export default function Home() {
   const [colorBalanceG, setColorBalanceG] = useState<number>(0);
   const [colorBalanceB, setColorBalanceB] = useState<number>(0);
   const [histogramData, setHistogramData] = useState<HistogramData | null>(null);
-  const [thresholdEnabled, setThresholdEnabled] = useState<boolean>(() => readSavedProject()?.thresholdEnabled ?? false);
-  const [threshold, setThreshold] = useState<number>(() => readSavedProject()?.threshold ?? 128);
+  const [thresholdEnabled, setThresholdEnabled] = useState<boolean>(false);
+  const [threshold, setThreshold] = useState<number>(128);
   const [isComparingBefore, setIsComparingBefore] = useState(false);
-  const [rotation, setRotation] = useState(() => readSavedProject()?.rotation ?? 0);
-  const [flipX, setFlipX] = useState(() => readSavedProject()?.flipX ?? false);
-  const [flipY, setFlipY] = useState(() => readSavedProject()?.flipY ?? false);
-  const [filterMode, setFilterMode] = useState<FilterMode>(() => readSavedProject()?.filterMode ?? "none");
-  const [filterIntensity, setFilterIntensity] = useState<number>(() => readSavedProject()?.filterIntensity ?? 50);
+  const [rotation, setRotation] = useState(0);
+  const [flipX, setFlipX] = useState(false);
+  const [flipY, setFlipY] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>("none");
+  const [filterIntensity, setFilterIntensity] = useState<number>(50);
   const [filterCategoryFilter, setFilterCategoryFilter] = useState<"الكل" | FilterCategory>("الكل");
   const [exportScale, setExportScale] = useState<number>(1);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
-  const [strokes, setStrokes] = useState<Stroke[]>(() => readSavedProject()?.strokes ?? []);
-  const [shapes, setShapes] = useState<ShapeElement[]>(() => readSavedProject()?.shapes ?? []);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [shapes, setShapes] = useState<ShapeElement[]>([]);
   const [brushSize, setBrushSize] = useState<number>(16);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
-  const [textElements, setTextElements] = useState<TextElement[]>(() => readSavedProject()?.textElements ?? []);
+  const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [foregroundColor, setForegroundColor] = useState("#2dd4bf");
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
@@ -504,6 +529,14 @@ export default function Home() {
   const [bgFeather, setBgFeather] = useState<number>(3);
   const [bgBlurRadius, setBgBlurRadius] = useState<number>(20);
   const [extractedSubjectUrl, setExtractedSubjectUrl] = useState<string | null>(null);
+  const [floatingSubject, setFloatingSubject] = useState<FloatingSubject | null>(null);
+  const [hasCustomBackground, setHasCustomBackground] = useState<boolean>(false);
+  const isDraggingSubjectRef = useRef(false);
+  const subjectDragStartRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+  const floatingSubjectPosRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRafIdRef = useRef<number | null>(null);
+  const baseOffscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cachedSubjectImgRef = useRef<HTMLImageElement | null>(null);
 
   // Phase 13: AI & Advanced Features State
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -515,9 +548,14 @@ export default function Home() {
   const [outpaintAmount, setOutpaintAmount] = useState<number>(20); // percent
   const [autocropPadding, setAutocropPadding] = useState<number>(10); // px
 
-  // Phase 9: Advanced Layers State
+  // Phase 9 & Deep Layers State
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editingLayerName, setEditingLayerName] = useState("");
+  const [soloLayerId, setSoloLayerId] = useState<string | null>(null);
+  const savedVisibilitiesRef = useRef<Record<string, boolean>>({});
+  const [layerFilter, setLayerFilter] = useState<string>("all");
+  const [draggedLayerIndex, setDraggedLayerIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const swapColors = () => {
     const fg = foregroundColor;
@@ -553,11 +591,13 @@ export default function Home() {
   const historyRef = useRef<EditorSnapshot[]>([]);
   const redoRef = useRef<EditorSnapshot[]>([]);
   const restoringRef = useRef(false);
+  const customBgInputRef = useRef<HTMLInputElement>(null);
 
   // Phase 1 Enhanced State: Menus, Modals & Project Lifecycle
   const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "image" | "filter" | "view" | "export" | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [fileInfoOpen, setFileInfoOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [exportOptionsOpen, setExportOptionsOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"png" | "jpeg" | "webp">("png");
   const [exportQuality, setExportQuality] = useState(92);
@@ -576,6 +616,45 @@ export default function Home() {
   const spacePressedRef = useRef(false);
   const previousToolRef = useRef(activeTool);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Responsive stage measurement and automatic proportional card sizing
+  const [stageDimensions, setStageDimensions] = useState<{ width: number; height: number }>({ width: 800, height: 500 });
+
+  useEffect(() => {
+    const stage = canvasStageRef.current;
+    if (!stage) return;
+    const updateSize = () => {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      if (w > 50 && h > 50) {
+        setStageDimensions({ width: w, height: h });
+      }
+    };
+    updateSize();
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
+
+  const cardDimensions = useMemo(() => {
+    const w = imageSize.width || 2048;
+    const h = imageSize.height || 1536;
+    const aspect = w / Math.max(1, h);
+
+    // Padding inside stage for clean presentation and space for badges/tools
+    const maxW = Math.max(150, stageDimensions.width - 50);
+    const maxH = Math.max(150, stageDimensions.height - 50);
+
+    let cardW = maxW;
+    let cardH = Math.round(maxW / aspect);
+
+    if (cardH > maxH) {
+      cardH = maxH;
+      cardW = Math.round(maxH * aspect);
+    }
+
+    return { width: Math.max(40, cardW), height: Math.max(40, cardH) };
+  }, [imageSize.width, imageSize.height, stageDimensions.width, stageDimensions.height]);
 
   // Phase 3 Enhanced State: Resize Image Dialog
   const [resizeDialogOpen, setResizeDialogOpen] = useState(false);
@@ -651,6 +730,7 @@ export default function Home() {
       }
     }
     if (missingMask) return; // Wait for masks to load before rendering
+    if (isDraggingSubjectRef.current) return; // Fast RAF renders during active drag
 
     setIsRendering(true);
 
@@ -668,13 +748,14 @@ export default function Home() {
         return;
       }
       context.clearRect(0, 0, outputWidth, outputHeight);
-      context.save();
-      context.translate(outputWidth / 2, outputHeight / 2);
-      context.rotate((quarterTurn * Math.PI) / 180);
-      context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+      context.filter = "none";
 
       // Before/After Comparison Mode: Hold button to preview untouched original
       if (isComparingBefore) {
+        context.save();
+        context.translate(outputWidth / 2, outputHeight / 2);
+        context.rotate((quarterTurn * Math.PI) / 180);
+        context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
         context.filter = "none";
         context.drawImage(image, -width / 2, -height / 2, width, height);
         context.restore();
@@ -690,113 +771,182 @@ export default function Home() {
       const grayscaleValue = (filterMode === "edges" || filterMode === "sobel" || filterMode === "canny" || filterMode === "sketch" || filterMode === "charcoal") ? 100 : grayscale;
       const sepiaValue = (filterMode === "vintage") ? Math.max(70, sepia) : sepia;
       const hueValue = hue || 0;
-      context.filter = `brightness(${brightnessValue}%) contrast(${contrastValue}%) saturate(${saturation}%) hue-rotate(${hueValue}deg) grayscale(${grayscaleValue}%) sepia(${sepiaValue}%) invert(${invert}%)${blurValue}`;
-      const activeMask = maskRect && layers.some((layer) => layer.kind === "mask" && layer.visible) ? maskRect : null;
-      if (activeMask) {
-        context.beginPath();
-        context.rect(activeMask.x - outputWidth / 2, activeMask.y - outputHeight / 2, activeMask.width, activeMask.height);
-        context.clip();
-      }
-      // Phase 5: Image Layer Opacity & Phase 10: Mask
-      const imgLayer = layers.find((l) => l.kind === "image" && l.visible);
-      if (imgLayer) {
-        if (typeof imgLayer.opacity === "number") {
-          context.globalAlpha = opacityToAlpha(imgLayer.opacity);
+
+      // In pure cutout mode (floatingSubject active and no custom background uploaded):
+      // The canvas must show ONLY the isolated subject — NEVER the base photo underneath!
+      const isPureCutout = Boolean(floatingSubject && !hasCustomBackground);
+
+      const drawBaseImagePass = (imgLyr?: LayerInfo) => {
+        const targetLyr = imgLyr || layers.find((l) => l.kind === "image");
+        if (!targetLyr || !targetLyr.visible || isPureCutout) return;
+
+        const offscreenBase = document.createElement("canvas");
+        offscreenBase.width = outputWidth;
+        offscreenBase.height = outputHeight;
+        const offBaseCtx = offscreenBase.getContext("2d");
+        if (offBaseCtx) {
+          offBaseCtx.save();
+          offBaseCtx.translate(outputWidth / 2, outputHeight / 2);
+          offBaseCtx.rotate((quarterTurn * Math.PI) / 180);
+          offBaseCtx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+          offBaseCtx.filter = `brightness(${brightnessValue}%) contrast(${contrastValue}%) saturate(${saturation}%) hue-rotate(${hueValue}deg) grayscale(${grayscaleValue}%) sepia(${sepiaValue}%) invert(${invert}%)${blurValue}`;
+          offBaseCtx.drawImage(image, -width / 2, -height / 2, width, height);
+          offBaseCtx.restore();
+
+          // Active Rectangular Mask if present
+          const activeMask = maskRect && layers.some((layer) => layer.kind === "mask" && layer.visible) ? maskRect : null;
+          if (activeMask) {
+            offBaseCtx.save();
+            offBaseCtx.globalCompositeOperation = "destination-in";
+            offBaseCtx.fillRect(activeMask.x, activeMask.y, activeMask.width, activeMask.height);
+            offBaseCtx.restore();
+          }
+
+          // Apply Non-destructive layer mask if enabled
+          if (targetLyr.maskData && targetLyr.maskEnabled !== false && cachedMasksRef.current[targetLyr.id]) {
+            offBaseCtx.save();
+            offBaseCtx.globalCompositeOperation = "destination-in";
+            offBaseCtx.drawImage(cachedMasksRef.current[targetLyr.id], 0, 0, outputWidth, outputHeight);
+            offBaseCtx.restore();
+          }
+
+          context.save();
+          context.globalAlpha = opacityToAlpha(targetLyr.opacity);
+          context.globalCompositeOperation = blendModeToCompositeOp(targetLyr.blendMode || "normal");
+          context.drawImage(offscreenBase, 0, 0);
+          context.restore();
+        }
+
+        applyPixelAdjustments(context, outputWidth, outputHeight, {
+          exposure,
+          temperature,
+          gamma,
+          balanceR: colorBalanceR,
+          balanceG: colorBalanceG,
+          balanceB: colorBalanceB,
+        });
+
+        if (filterMode !== "none" && filterMode !== "blur") {
+          executeFilter(context, outputWidth, outputHeight, filterMode, filterIntensity);
+        }
+        if (thresholdEnabled) applyThreshold(context, outputWidth, outputHeight, threshold);
+      };
+
+      const drawTextPass = (textLyr?: LayerInfo) => {
+        const targetLyr = textLyr || layers.find((l) => l.kind === "text");
+        if (!targetLyr || !targetLyr.visible) return;
+
+        const offscreenText = document.createElement("canvas");
+        offscreenText.width = outputWidth;
+        offscreenText.height = outputHeight;
+        const offTextCtx = offscreenText.getContext("2d");
+
+        if (offTextCtx) {
+          drawTexts(offTextCtx, textElements, new Set(layers.filter((layer) => layer.kind === "text" && layer.visible).map((layer) => layer.id)));
+
+          if (targetLyr.maskData && targetLyr.maskEnabled !== false && cachedMasksRef.current[targetLyr.id]) {
+            offTextCtx.globalCompositeOperation = "destination-in";
+            offTextCtx.drawImage(cachedMasksRef.current[targetLyr.id], 0, 0, outputWidth, outputHeight);
+          }
+
+          context.save();
+          context.globalAlpha = opacityToAlpha(targetLyr.opacity ?? 100);
+          context.globalCompositeOperation = blendModeToCompositeOp(targetLyr.blendMode || "normal");
+          context.drawImage(offscreenText, 0, 0);
+          context.restore();
+        }
+      };
+
+      const drawPaintPass = (paintLyr?: LayerInfo) => {
+        const targetLyr = paintLyr || layers.find((l) => l.kind === "paint");
+        if (!targetLyr || !targetLyr.visible) return;
+
+        const paintOpacity = targetLyr.opacity ?? 100;
+        const paintBlend = targetLyr.blendMode ?? "normal";
+        drawPaintLayer(
+          context,
+          outputWidth,
+          outputHeight,
+          strokes,
+          shapes,
+          new Set(layers.filter((layer) => layer.kind === "paint" && layer.visible).map((layer) => layer.id)),
+          paintOpacity,
+          paintBlend,
+          targetLyr.maskData ? cachedMasksRef.current[targetLyr.id] : undefined,
+          targetLyr.maskEnabled
+        );
+      };
+
+      const drawSubjectPass = (subjLyr?: LayerInfo) => {
+        if (!floatingSubject) return;
+        const targetLyr = subjLyr || layers.find((l) => l.id === "floating-subject" || l.kind === "subject");
+        if (targetLyr && targetLyr.visible === false) return;
+
+        let subImg = cachedSubjectImgRef.current;
+        if (!subImg || subImg.src !== floatingSubject.dataUrl) {
+          subImg = new Image();
+          subImg.onload = () => {
+            cachedSubjectImgRef.current = subImg;
+            renderCanvas();
+          };
+          subImg.src = floatingSubject.dataUrl;
+        } else {
+          const posX = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.x : floatingSubject.x;
+          const posY = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.y : floatingSubject.y;
+          context.save();
+          if (targetLyr) {
+            context.globalAlpha = opacityToAlpha(targetLyr.opacity);
+            context.globalCompositeOperation = blendModeToCompositeOp(targetLyr.blendMode || "normal");
+          }
+          context.drawImage(subImg, posX, posY, floatingSubject.width, floatingSubject.height);
+          context.restore();
+        }
+      };
+
+      // Order of execution: bottom to top of visual stack
+      const renderStack = [...layers].reverse();
+      let drawnSubject = false;
+      let drawnBaseImage = false;
+
+      for (const lyr of renderStack) {
+        if (!lyr.visible) continue;
+        if (lyr.kind === "image") {
+          drawBaseImagePass(lyr);
+          drawnBaseImage = true;
+        } else if (lyr.kind === "subject" || lyr.id === "floating-subject") {
+          drawSubjectPass(lyr);
+          drawnSubject = true;
+        } else if (lyr.kind === "paint") {
+          drawPaintPass(lyr);
+        } else if (lyr.kind === "text") {
+          drawTextPass(lyr);
         }
       }
-      
-      // Draw image to an offscreen canvas to apply mask non-destructively
-      const offscreenBase = document.createElement("canvas");
-      offscreenBase.width = outputWidth;
-      offscreenBase.height = outputHeight;
-      const offBaseCtx = offscreenBase.getContext("2d");
-      if (offBaseCtx) {
-        offBaseCtx.translate(outputWidth / 2, outputHeight / 2);
-        offBaseCtx.rotate((quarterTurn * Math.PI) / 180);
-        offBaseCtx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-        offBaseCtx.drawImage(image, -width / 2, -height / 2, width, height);
-        offBaseCtx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
-        
-        // Apply Mask for base image
-        if (imgLayer && imgLayer.maskData && imgLayer.maskEnabled !== false && cachedMasksRef.current[imgLayer.id]) {
-          offBaseCtx.globalCompositeOperation = "destination-in";
-          offBaseCtx.drawImage(cachedMasksRef.current[imgLayer.id], 0, 0, outputWidth, outputHeight);
-        }
-        
-        // Reset and draw to main canvas
-        context.setTransform(1, 0, 0, 1, 0, 0); // Reset main transform so we draw the offscreen correctly
-        context.drawImage(offscreenBase, 0, 0);
-        // Restore transform for subsequent layers if needed
-        context.translate(outputWidth / 2, outputHeight / 2);
-        context.rotate((quarterTurn * Math.PI) / 180);
-        context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+
+      // Fallbacks if not explicitly listed in layers array
+      if (!drawnBaseImage && !isPureCutout) {
+        drawBaseImagePass();
+      }
+      if (floatingSubject && !drawnSubject) {
+        drawSubjectPass();
       }
 
-      context.filter = "none";
-      context.restore();
-
-      // Point 5: Apply Exposure, Temperature, Gamma & Color Balance
-      applyPixelAdjustments(context, outputWidth, outputHeight, {
-        exposure,
-        temperature,
-        gamma,
-        balanceR: colorBalanceR,
-        balanceG: colorBalanceG,
-        balanceB: colorBalanceB,
-      });
-
-      // Phase 5: Text Layer Opacity, Blend Mode & Phase 10: Mask
-      const textLayer = layers.find((l) => l.kind === "text" && l.visible);
-      
-      const offscreenText = document.createElement("canvas");
-      offscreenText.width = outputWidth;
-      offscreenText.height = outputHeight;
-      const offTextCtx = offscreenText.getContext("2d");
-      
-      if (offTextCtx) {
-        drawTexts(offTextCtx, textElements, new Set(layers.filter((layer) => layer.kind === "text" && layer.visible).map((layer) => layer.id)));
-        
-        if (textLayer && textLayer.maskData && textLayer.maskEnabled !== false && cachedMasksRef.current[textLayer.id]) {
-          offTextCtx.globalCompositeOperation = "destination-in";
-          offTextCtx.drawImage(cachedMasksRef.current[textLayer.id], 0, 0, outputWidth, outputHeight);
-        }
-        
-        context.save();
-        if (textLayer) {
-          context.globalAlpha = opacityToAlpha(textLayer.opacity ?? 100);
-          context.globalCompositeOperation = blendModeToCompositeOp(textLayer.blendMode || "normal");
-        }
-        context.drawImage(offscreenText, 0, 0);
-        context.restore();
+      // Cache base composite (without floatingSubject overlay) for ultra-fast 60fps dragging
+      const baseBuffer = document.createElement("canvas");
+      baseBuffer.width = outputWidth;
+      baseBuffer.height = outputHeight;
+      const baseBufCtx = baseBuffer.getContext("2d");
+      if (baseBufCtx) {
+        baseBufCtx.drawImage(canvas, 0, 0);
+        baseOffscreenCanvasRef.current = baseBuffer;
       }
 
-      // Phase 5: Paint Layer Opacity and Blend Mode
-      const paintLayer = layers.find((l) => l.kind === "paint" && l.visible);
-      const paintOpacity = paintLayer?.opacity ?? 100;
-      const paintBlend = paintLayer?.blendMode ?? "normal";
-      drawPaintLayer(
-        context,
-        outputWidth,
-        outputHeight,
-        strokes,
-        shapes,
-        new Set(layers.filter((layer) => layer.kind === "paint" && layer.visible).map((layer) => layer.id)),
-        paintOpacity,
-        paintBlend,
-        paintLayer && paintLayer.maskData ? cachedMasksRef.current[paintLayer.id] : undefined,
-        paintLayer?.maskEnabled
-      );
-
-      // Point 6: Universal Filters Engine Execution
-      if (filterMode !== "none" && filterMode !== "blur") {
-        executeFilter(context, outputWidth, outputHeight, filterMode, filterIntensity);
+      if (!isDraggingSubjectRef.current) {
+        try {
+          const histData = calculateHistogram(context.getImageData(0, 0, Math.min(outputWidth, 600), Math.min(outputHeight, 600)));
+          setHistogramData(histData);
+        } catch {}
       }
-      if (thresholdEnabled) applyThreshold(context, outputWidth, outputHeight, threshold);
-
-      try {
-        const histData = calculateHistogram(context.getImageData(0, 0, Math.min(outputWidth, 600), Math.min(outputHeight, 600)));
-        setHistogramData(histData);
-      } catch {}
 
       setImageSize({ width: outputWidth, height: outputHeight });
       setIsRendering(false);
@@ -818,7 +968,37 @@ export default function Home() {
       setIsRendering(false);
     };
     image.src = imageSrc;
-  }, [brightness, contrast, filterMode, filterIntensity, grayscale, saturation, sepia, invert, thresholdEnabled, threshold, hue, exposure, temperature, gamma, colorBalanceR, colorBalanceG, colorBalanceB, isComparingBefore, flipX, flipY, imageSrc, rotation, strokes, shapes, textElements, maskRect, layers]);
+  }, [brightness, contrast, filterMode, filterIntensity, grayscale, saturation, sepia, invert, thresholdEnabled, threshold, hue, exposure, temperature, gamma, colorBalanceR, colorBalanceG, colorBalanceB, isComparingBefore, flipX, flipY, imageSrc, rotation, strokes, shapes, textElements, maskRect, layers, floatingSubject, activeTool, hasCustomBackground]);
+
+  /**
+   * High-Performance Instant 60fps Subject Dragging (Zero Lag / Zero Re-render Loop)
+   */
+  const fastRenderFloatingSubject = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !floatingSubject) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const subImg = cachedSubjectImgRef.current;
+    if (!subImg || !subImg.complete) return;
+
+    const pos = floatingSubjectPosRef.current;
+    const curX = pos ? pos.x : floatingSubject.x;
+    const curY = pos ? pos.y : floatingSubject.y;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (baseOffscreenCanvasRef.current) {
+      context.drawImage(baseOffscreenCanvasRef.current, 0, 0);
+    }
+
+    context.drawImage(subImg, curX, curY, floatingSubject.width, floatingSubject.height);
+  };
+
+  // Clear any old stale project from localStorage on startup so every session opens a fresh clean project
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem("imagepro-studio-project");
+    } catch {}
+  }, []);
 
   useEffect(() => { renderCanvas(); }, [renderCanvas]);
 
@@ -843,31 +1023,24 @@ export default function Home() {
     }
   }, [brightness, contrast, filterMode, filterIntensity, grayscale, saturation, sepia, invert, thresholdEnabled, threshold, hue, exposure, temperature, gamma, colorBalanceR, colorBalanceG, colorBalanceB, imageSrc, layers, rotation, strokes, textElements, shapes, maskRect, flipX, flipY]);
 
-  // Phase 2: Dynamic Fit to Screen
+  // Dynamic Fit to Screen
   const fitToScreen = useCallback(() => {
-    const stage = canvasStageRef.current;
-    if (!stage || !imageSize.width || !imageSize.height) {
-      setZoom(75);
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+    setStatus("تمت ملاءمة الصورة مع مساحة العمل بالكامل (100%)");
+  }, []);
+
+  // Actual Size (1:1 pixel rendering)
+  const actualSize = () => {
+    if (!imageSize.width || !cardDimensions.width) {
+      setZoom(100);
       setPan({ x: 0, y: 0 });
       return;
     }
-    const paddingW = isInspectorOpen ? 120 : 60;
-    const stageW = Math.max(200, stage.clientWidth - paddingW);
-    const stageH = Math.max(200, stage.clientHeight - 80);
-    const ratioW = stageW / imageSize.width;
-    const ratioH = stageH / imageSize.height;
-    const fitRatio = Math.min(ratioW, ratioH);
-    const calculatedZoom = Math.max(20, Math.min(150, Math.round(fitRatio * 100)));
-    setZoom(calculatedZoom);
+    const realZoom = Math.max(10, Math.min(400, Math.round((imageSize.width / cardDimensions.width) * 100)));
+    setZoom(realZoom);
     setPan({ x: 0, y: 0 });
-    setStatus(`تمت ملاءمة الصورة مع مساحة العمل (${calculatedZoom}%)`);
-  }, [imageSize.width, imageSize.height, isInspectorOpen]);
-
-  // Phase 2: Actual Size (100%)
-  const actualSize = () => {
-    setZoom(100);
-    setPan({ x: 0, y: 0 });
-    setStatus("تم ضبط العرض إلى 100% (الحجم الفعلي)");
+    setStatus(`تم ضبط العرض إلى 100% (الحجم الفعلي: ${realZoom}%)`);
   };
 
   useEffect(() => {
@@ -925,6 +1098,26 @@ export default function Home() {
         event.preventDefault();
         swapColors();
         return;
+      } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && (event.key === "]" || event.key === "}")) {
+        event.preventDefault();
+        moveLayerToTop();
+        return;
+      } else if ((event.metaKey || event.ctrlKey) && !event.shiftKey && (event.key === "]" || event.key === "}")) {
+        event.preventDefault();
+        moveLayerUp();
+        return;
+      } else if ((event.metaKey || event.ctrlKey) && !event.shiftKey && (event.key === "[" || event.key === "{")) {
+        event.preventDefault();
+        moveLayerDown();
+        return;
+      } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && (event.key === "[" || event.key === "{")) {
+        event.preventDefault();
+        moveLayerToBottom();
+        return;
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        duplicateSelectedLayer();
+        return;
       }
 
       const shortcut = event.key.toUpperCase();
@@ -962,10 +1155,59 @@ export default function Home() {
       return;
     }
     const objectUrl = URL.createObjectURL(file);
-    setImageSrc(objectUrl);
-    setExtractedSubjectUrl(null);
-    setImageName(file.name.replace(/\.[^/.]+$/, ""));
-    setStatus(`تم فتح الصورة: ${file.name} بنجاح`);
+
+    // Preload image to instantly calculate aspect ratio and auto-fit to workspace without any cropping
+    const tempImg = new Image();
+    tempImg.onload = () => {
+      const nw = tempImg.naturalWidth || 1200;
+      const nh = tempImg.naturalHeight || 800;
+
+      // Clean all previous strokes, artwork, floating subjects, and reset pan/zoom
+      setPan({ x: 0, y: 0 });
+      setZoom(100);
+      setImageSize({ width: nw, height: nh });
+
+      setStrokes([]);
+      setShapes([]);
+      setTextElements([]);
+      setFloatingSubject(null);
+      floatingSubjectPosRef.current = null;
+      setHasCustomBackground(false);
+      setExtractedSubjectUrl(null);
+      setMaskRect(null);
+      setSelection(null);
+
+      cachedImageRef.current = tempImg;
+      cachedImageSrcRef.current = objectUrl;
+      cachedSubjectImgRef.current = null;
+      cachedMasksRef.current = {};
+      baseOffscreenCanvasRef.current = null;
+
+      setBrightness(0);
+      setContrast(0);
+      setGrayscale(0);
+      setSaturation(100);
+      setSepia(0);
+      setInvert(0);
+      setThresholdEnabled(false);
+      setThreshold(128);
+      setRotation(0);
+      setFlipX(false);
+      setFlipY(false);
+      setFilterMode("none");
+      setLayers(layerSeed);
+      setSelectedLayer("portrait");
+
+      setImageSrc(objectUrl);
+      setImageName(file.name.replace(/\.[^/.]+$/, ""));
+      setStatus(`تم فتح الصورة: ${file.name} بنجاح وملاءمتها بالكامل في مساحة العمل (${nw} × ${nh} بكسل)`);
+    };
+    tempImg.onerror = () => {
+      setStatus("تعذر تحميل ملف الصورة المحدد — يرجى التأكد من صلاحية الملف");
+    };
+    tempImg.src = objectUrl;
+
+    event.target.value = "";
   };
 
   const createNewProject = (name: string, width: number, height: number, bgColor: "transparent" | "#ffffff" | "#111b1b") => {
@@ -982,10 +1224,28 @@ export default function Home() {
       }
     }
     const dataUrl = tempCanvas.toDataURL("image/png");
-    setImageSrc(dataUrl);
+
+    setStrokes([]);
+    setShapes([]);
+    setTextElements([]);
+    setFloatingSubject(null);
+    floatingSubjectPosRef.current = null;
+    setHasCustomBackground(false);
     setExtractedSubjectUrl(null);
+    setMaskRect(null);
+    setSelection(null);
+    cachedImageRef.current = null;
+    cachedImageSrcRef.current = null;
+    cachedSubjectImgRef.current = null;
+    cachedMasksRef.current = {};
+    baseOffscreenCanvasRef.current = null;
+    try { window.localStorage.removeItem("imagepro-studio-project"); } catch {}
+
+    setImageSrc(dataUrl);
     setImageName(name.trim() || "مشروع جديد");
     setImageSize({ width, height });
+    setPan({ x: 0, y: 0 });
+    setZoom(100);
     setBrightness(0);
     setContrast(0);
     setGrayscale(0);
@@ -998,11 +1258,6 @@ export default function Home() {
     setFlipX(false);
     setFlipY(false);
     setFilterMode("none");
-    setStrokes([]);
-    setShapes([]);
-    setTextElements([]);
-    setMaskRect(null);
-    setSelection(null);
     setLayers([
       { id: "background", name: "الخلفية", kind: "background", color: bgColor === "transparent" ? "#2dd4bf" : bgColor, visible: true },
     ]);
@@ -1013,33 +1268,56 @@ export default function Home() {
 
   const loadSampleImage = (key: keyof typeof sampleImages) => {
     setSampleImageKey(key);
-    setImageSrc(sampleImages[key]);
-    setExtractedSubjectUrl(null);
-    const names: Record<keyof typeof sampleImages, string> = {
-      portrait: "دراسة بورتريه شخصي",
-      landscape: "دراسة منظر طبيعي",
-      stillLife: "دراسة طبيعة صامتة",
+    const src = sampleImages[key];
+    const tempImg = new Image();
+    tempImg.onload = () => {
+      const nw = tempImg.naturalWidth || 2048;
+      const nh = tempImg.naturalHeight || 1536;
+      setPan({ x: 0, y: 0 });
+      setZoom(100);
+      setImageSize({ width: nw, height: nh });
+
+      setStrokes([]);
+      setShapes([]);
+      setTextElements([]);
+      setFloatingSubject(null);
+      floatingSubjectPosRef.current = null;
+      setHasCustomBackground(false);
+      setExtractedSubjectUrl(null);
+      setMaskRect(null);
+      setSelection(null);
+      cachedImageRef.current = tempImg;
+      cachedImageSrcRef.current = src;
+      cachedSubjectImgRef.current = null;
+      cachedMasksRef.current = {};
+      baseOffscreenCanvasRef.current = null;
+
+      const names: Record<keyof typeof sampleImages, string> = {
+        portrait: "دراسة بورتريه شخصي",
+        landscape: "دراسة منظر طبيعي",
+        stillLife: "دراسة طبيعة صامتة",
+      };
+      setImageName(names[key]);
+      setBrightness(0);
+      setContrast(0);
+      setGrayscale(0);
+      setSaturation(100);
+      setSepia(0);
+      setInvert(0);
+      setThresholdEnabled(false);
+      setThreshold(128);
+      setRotation(0);
+      setFlipX(false);
+      setFlipY(false);
+      setFilterMode("none");
+      setLayers(layerSeed);
+      setSelectedLayer("portrait");
+
+      setImageSrc(src);
+      setActiveMenu(null);
+      setStatus(`تم تحميل الصورة النموذجية: ${names[key]}`);
     };
-    setImageName(names[key]);
-    setBrightness(0);
-    setContrast(0);
-    setGrayscale(0);
-    setSaturation(100);
-    setSepia(0);
-    setInvert(0);
-    setThresholdEnabled(false);
-    setThreshold(128);
-    setRotation(0);
-    setFlipX(false);
-    setFlipY(false);
-    setFilterMode("none");
-    setStrokes([]);
-    setShapes([]);
-    setTextElements([]);
-    setMaskRect(null);
-    setSelection(null);
-    setActiveMenu(null);
-    setStatus(`تم تحميل الصورة النموذجية: ${names[key]}`);
+    tempImg.src = src;
   };
 
   const restoreSnapshot = (snapshot: EditorSnapshot) => {
@@ -1128,6 +1406,9 @@ export default function Home() {
     if (!croppedContext) return;
     croppedContext.drawImage(canvas, left, top, size, size, 0, 0, size, size);
     setImageSrc(cropped.toDataURL("image/png"));
+    setImageSize({ width: size, height: size });
+    setPan({ x: 0, y: 0 });
+    setZoom(100);
     setRotation(0);
     setFlipX(false);
     setFlipY(false);
@@ -1156,6 +1437,9 @@ export default function Home() {
     if (!ctx) return;
     ctx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
     setImageSrc(cropped.toDataURL("image/png"));
+    setImageSize({ width: cropW, height: cropH });
+    setPan({ x: 0, y: 0 });
+    setZoom(100);
     setRotation(0);
     setFlipX(false);
     setFlipY(false);
@@ -1169,13 +1453,18 @@ export default function Home() {
       setStatus("حدد منطقة للقص أولاً");
       return;
     }
+    const cropW = Math.round(selection.width);
+    const cropH = Math.round(selection.height);
     const cropped = document.createElement("canvas");
-    cropped.width = Math.round(selection.width);
-    cropped.height = Math.round(selection.height);
+    cropped.width = cropW;
+    cropped.height = cropH;
     const context = cropped.getContext("2d");
     if (!context) return;
     context.drawImage(canvas, selection.x, selection.y, selection.width, selection.height, 0, 0, cropped.width, cropped.height);
     setImageSrc(cropped.toDataURL("image/png"));
+    setImageSize({ width: cropW, height: cropH });
+    setPan({ x: 0, y: 0 });
+    setZoom(100);
     setRotation(0);
     setFlipX(false);
     setFlipY(false);
@@ -1474,6 +1763,15 @@ export default function Home() {
         }
       });
 
+      // Clear any floating subject so no duplicate exists
+      setFloatingSubject(null);
+      floatingSubjectPosRef.current = null;
+      setHasCustomBackground(false);
+      cachedImageRef.current = null;
+      cachedImageSrcRef.current = null;
+      cachedSubjectImgRef.current = null;
+      baseOffscreenCanvasRef.current = null;
+
       // Cache extracted subject for instant portrait bokeh / replacement
       setExtractedSubjectUrl(result.dataUrl);
       setImageSrc(result.dataUrl);
@@ -1584,11 +1882,11 @@ export default function Home() {
       setAiProgress(85);
 
       // Step 2: Composite sharp subject on top of blurred background
-      const bokehResult = await createPortraitBokeh(canvas, subjectUrl, bgBlurRadius, 0.45);
+      const bokehResult = await createPortraitBokeh(canvas, subjectUrl, bgBlurRadius, 0);
       setImageSrc(bokehResult);
 
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-      setStatus(`🌫️ [${elapsed}ث] تم تطبيق تمويه البورتريه (Portrait Bokeh) بنجاح — الجسم حاد بنسبة 100% والخلفية مموهة بعمق ميدان واقعي (Radius: ${bgBlurRadius}px)`);
+      setStatus(`🌫️ [${elapsed}ث] تم تطبيق تمويه البورتريه (Portrait Bokeh) بنجاح — الجسم حاد بنسبة 100% والخلفية مموهة بنعومة سينمائية بدون أي تشوه أو تعتيم (Radius: ${bgBlurRadius}px)`);
     } catch (err) {
       setStatus(`❌ تعذر تمويه الخلفية: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -1638,6 +1936,392 @@ export default function Home() {
       setStatus(`✅ [${elapsed}ث] تم استبدال الخلفية بنجاح إلى [${styleAr}] مع الحفاظ التام على حدة وتفاصيل الجسم`);
     } catch (err) {
       setStatus(`❌ تعذر استبدال الخلفية: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
+    }
+  };
+
+  /**
+   * 5. عزل المحتوى الصافي فقط (Pure Content Cutout - محتوى الصورة بدون أي خلفية أو طبقات أو مساحات زائدة)
+   * يعزل الجسم بدقة متناهية ويجعله عنصراً حراً قابلاً للتحريك بالسحب في أي مكان بدون تحريك مساحة العمل
+   */
+  const handlePureContentCutout = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
+    saveAiOriginalSnapshot("عزل المحتوى الصافي فقط (Pure Content Cutout)");
+    const t0 = performance.now();
+    setAiProcessing(true);
+    setAiTask("عزل المحتوى واقتصاص الأطراف بدون خلفية أو طبقات...");
+    setAiProgress(15);
+    setStatus("⏳ جاري استخراج المحتوى الصافي بالذكاء الاصطناعي بدقة متناهية...");
+
+    try {
+      const result = await extractSubjectFromCanvas(canvas, {
+        tolerance: bgRemoveTolerance,
+        edgeFeather: bgFeather,
+        roi: selection,
+        onProgress: (msg, pct) => {
+          setAiTask(msg);
+          setAiProgress(pct);
+          setStatus(`⏳ ${msg} (${pct}%)`);
+        }
+      });
+
+      // Load result to inspect pixel alpha bounds and crop tightly
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = result.dataUrl;
+      });
+
+      const W = img.naturalWidth || canvas.width;
+      const H = img.naturalHeight || canvas.height;
+
+      // Render to offscreen canvas to perform direct pixel-accurate scanning & noise cleanup
+      const scanCanvas = document.createElement("canvas");
+      scanCanvas.width = W;
+      scanCanvas.height = H;
+      const scanCtx = scanCanvas.getContext("2d");
+      if (!scanCtx) throw new Error("Could not create scan canvas context");
+      scanCtx.drawImage(img, 0, 0, W, H);
+      const scanImgData = scanCtx.getImageData(0, 0, W, H);
+      const scanData = scanImgData.data;
+
+      // Client-side intelligent spatial cleanup to ensure zero stray artifacts or distant props
+      cleanMaskNoise(scanData, W, H);
+      scanCtx.putImageData(scanImgData, 0, 0);
+
+      // Find the true, exact tight bounding box of remaining visible pixels (alpha >= 35)
+      let minX = W, minY = H, maxX = 0, maxY = 0;
+      let visiblePixels = 0;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const a = scanData[(y * W + x) * 4 + 3];
+          if (a >= 35) {
+            visiblePixels++;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (visiblePixels === 0) {
+        minX = 0; minY = 0; maxX = W - 1; maxY = H - 1;
+      }
+
+      // Exact pixel-perfect tight crop: ZERO extra background space or margins
+      const cropW = Math.max(1, maxX - minX + 1);
+      const cropH = Math.max(1, maxY - minY + 1);
+
+      const croppedCanvas = document.createElement("canvas");
+      croppedCanvas.width = cropW;
+      croppedCanvas.height = cropH;
+      const croppedCtx = croppedCanvas.getContext("2d");
+      if (!croppedCtx) throw new Error("Could not create cropped canvas context");
+
+      // Draw tightly cropped subject from the cleaned scan canvas
+      croppedCtx.drawImage(scanCanvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+      const tightDataUrl = croppedCanvas.toDataURL("image/png");
+
+      // Generate transparent blank base canvas so workspace remains full-size and not shrunk
+      const blankCanvas = document.createElement("canvas");
+      blankCanvas.width = W;
+      blankCanvas.height = H;
+      const blankDataUrl = blankCanvas.toDataURL("image/png");
+
+      setHasCustomBackground(false);
+      cachedImageRef.current = null;
+      cachedImageSrcRef.current = null;
+      baseOffscreenCanvasRef.current = null;
+
+      const preloadedTightImg = new Image();
+      preloadedTightImg.src = tightDataUrl;
+      cachedSubjectImgRef.current = preloadedTightImg;
+
+      setExtractedSubjectUrl(tightDataUrl);
+      setImageSrc(blankDataUrl);
+      setImageSize({ width: W, height: H });
+
+      // Initialize the movable floating subject
+      const newSubject: FloatingSubject = {
+        id: `subject-${Date.now()}`,
+        dataUrl: tightDataUrl,
+        x: minX,
+        y: minY,
+        width: cropW,
+        height: cropH,
+        naturalWidth: cropW,
+        naturalHeight: cropH
+      };
+      floatingSubjectPosRef.current = { x: minX, y: minY };
+      setFloatingSubject(newSubject);
+      setActiveTool("select");
+
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+      setStatus(`✅ [${elapsed}ث] تم عزل الشخص/المحتوى الصافي بدقة متناهية بدون أي مساحة عمل أو طبقة خلفه (${cropW}×${cropH} بكسل) — يمكنك الآن سحبه وتحريكه بحرية بأداة التحريك (V) في أي مكان!`);
+    } catch (err) {
+      console.error("Pure content cutout error:", err);
+      setStatus("❌ تعذر عزل المحتوى الصافي: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAiProcessing(false);
+      setAiTask("");
+      setAiProgress(0);
+    }
+  };
+
+  /**
+   * Helper: Quick Alignment for Floating Subject
+   */
+  const handleAlignSubject = (align: "center" | "left" | "right" | "top" | "bottom" | "reset") => {
+    if (!floatingSubject || !canvasRef.current) return;
+    const cw = canvasRef.current.width;
+    const ch = canvasRef.current.height;
+    setFloatingSubject(prev => {
+      if (!prev) return null;
+      let newX = prev.x;
+      let newY = prev.y;
+      if (align === "center" || align === "reset") {
+        newX = Math.round((cw - prev.width) / 2);
+        newY = Math.round((ch - prev.height) / 2);
+      } else if (align === "left") {
+        newX = 20;
+      } else if (align === "right") {
+        newX = Math.max(0, cw - prev.width - 20);
+      } else if (align === "top") {
+        newY = 20;
+      } else if (align === "bottom") {
+        newY = Math.max(0, ch - prev.height - 20);
+      }
+      floatingSubjectPosRef.current = { x: newX, y: newY };
+      return { ...prev, x: newX, y: newY };
+    });
+    setStatus(`🎯 تم ضبط محاذاة المحتوى المعزول إلى [${align === "center" ? "المنتصف" : align === "left" ? "اليسار" : align === "right" ? "اليمين" : align === "top" ? "الأعلى" : align === "bottom" ? "الأسفل" : "الوضع الافتراضي"}]`);
+  };
+
+  /**
+   * Helper: Scale and Resize Floating Subject (Maintain Center Anchor & Proportions)
+   */
+  const handleScaleSubject = (newScalePercent: number) => {
+    if (!floatingSubject) return;
+    const clampedPercent = Math.max(10, Math.min(400, Math.round(newScalePercent)));
+    const scaleFactor = clampedPercent / 100;
+
+    const baseW = floatingSubject.naturalWidth || floatingSubject.width;
+    const baseH = floatingSubject.naturalHeight || floatingSubject.height;
+
+    const newW = Math.max(20, Math.round(baseW * scaleFactor));
+    const newH = Math.max(20, Math.round(baseH * scaleFactor));
+
+    // Keep subject center point anchored in place
+    const curX = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.x : floatingSubject.x;
+    const curY = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.y : floatingSubject.y;
+    const centerX = curX + floatingSubject.width / 2;
+    const centerY = curY + floatingSubject.height / 2;
+
+    const newX = Math.round(centerX - newW / 2);
+    const newY = Math.round(centerY - newH / 2);
+
+    floatingSubjectPosRef.current = { x: newX, y: newY };
+    setFloatingSubject(prev => prev ? ({
+      ...prev,
+      x: newX,
+      y: newY,
+      width: newW,
+      height: newH,
+      naturalWidth: baseW,
+      naturalHeight: baseH
+    }) : null);
+    setStatus(`🔍 تم ضبط حجم المحتوى إلى ${clampedPercent}% (${newW} × ${newH} بكسل)`);
+  };
+
+  /**
+   * Helper: Increment / Decrement Floating Subject Scale by Delta Percentage
+   */
+  const handleScaleSubjectDelta = (deltaPercent: number) => {
+    if (!floatingSubject) return;
+    const baseW = floatingSubject.naturalWidth || floatingSubject.width;
+    const curPercent = Math.round((floatingSubject.width / baseW) * 100);
+    handleScaleSubject(curPercent + deltaPercent);
+  };
+
+  /**
+   * Helper: Fit Floating Subject Proportionally Inside Current Canvas
+   */
+  const handleFitSubjectToCanvas = () => {
+    if (!floatingSubject || !canvasRef.current) return;
+    const cw = canvasRef.current.width;
+    const ch = canvasRef.current.height;
+    const baseW = floatingSubject.naturalWidth || floatingSubject.width;
+    const baseH = floatingSubject.naturalHeight || floatingSubject.height;
+    const scale = Math.min((cw * 0.85) / baseW, (ch * 0.88) / baseH);
+    const newPercent = Math.round(scale * 100);
+    handleScaleSubject(newPercent);
+    handleAlignSubject("center");
+  };
+
+  /**
+   * Helper: Export Isolated Pure Subject as Clean Transparent PNG
+   */
+  const handleExportPureSubject = () => {
+    if (!floatingSubject) {
+      setStatus("⚠️ لا يوجد محتوى معزول حالياً للتصدير");
+      return;
+    }
+    downloadFile(floatingSubject.dataUrl, `isolated-subject-${Date.now()}.png`, "image/png");
+    setStatus("📥 تم تصدير المحتوى الصافي فقط بنجاح بصيغة PNG شفافة عالية الدقة وبدون أي خلفية");
+  };
+
+  /**
+   * Helper: Crop Entire Canvas/Workspace to Fit Subject Only (Eliminate any outer canvas borders)
+   */
+  const handleFitCanvasToSubject = () => {
+    if (!floatingSubject) return;
+    saveAiOriginalSnapshot("اقتصاص مساحة العمل للمحتوى الصافي");
+    setImageSrc(floatingSubject.dataUrl);
+    setImageSize({ width: floatingSubject.width, height: floatingSubject.height });
+    setFloatingSubject({
+      ...floatingSubject,
+      x: 0,
+      y: 0
+    });
+    floatingSubjectPosRef.current = { x: 0, y: 0 };
+    cachedImageRef.current = null;
+    cachedImageSrcRef.current = null;
+    baseOffscreenCanvasRef.current = null;
+    setStatus(`✂️ تم اقتصاص مساحة العمل بالكامل لتطابق المحتوى الصافي بدقة متناهية (${floatingSubject.width}×${floatingSubject.height} بكسل) — تم إزالة أي مساحة إضافية تماماً!`);
+  };
+
+  /**
+   * 6. رفع صورة خلفية مخصصة من جهاز المستخدم وتركيبها خلف العنصر المعزول
+   */
+  const handleUploadCustomBackground = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ""; // Reset so same file can be re-selected if needed
+
+    const canvas = canvasRef.current;
+    if (!canvas || !imageSrc) { setStatus("⚠️ يرجى فتح أو رفع صورة أولاً"); return; }
+
+    saveAiOriginalSnapshot(`استبدال الخلفية بصورة مخصصة (${file.name})`);
+    const t0 = performance.now();
+    setAiProcessing(true);
+    setAiTask("قراءة صورة الخلفية وعزل العنصر...");
+    setAiProgress(15);
+    setStatus(`⏳ جاري معالجة وتركيب صورة الخلفية المخصصة (${file.name})...`);
+
+    try {
+      // Read uploaded background image
+      const bgDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const bgImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        bgImg.onload = () => resolve();
+        bgImg.onerror = reject;
+        bgImg.src = bgDataUrl;
+      });
+
+      // Ensure subject is extracted
+      let subjectUrl = extractedSubjectUrl;
+      if (!subjectUrl) {
+        setAiTask("عزل العنصر بالذكاء الاصطناعي لوضعه على الخلفية الجديدة...");
+        setAiProgress(35);
+        const result = await extractSubjectFromCanvas(canvas, {
+          tolerance: bgRemoveTolerance,
+          edgeFeather: bgFeather,
+          roi: selection,
+          onProgress: (msg, pct) => {
+            setAiTask(msg);
+            setAiProgress(pct);
+          }
+        });
+        subjectUrl = result.dataUrl;
+        setExtractedSubjectUrl(subjectUrl);
+      }
+
+      // Load foreground subject
+      const fgImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        fgImg.onload = () => resolve();
+        fgImg.onerror = reject;
+        fgImg.src = subjectUrl;
+      });
+
+      // Target resolution based on uploaded background image (capped at 2560px for smooth performance)
+      let W = bgImg.naturalWidth || canvas.width || 1200;
+      let H = bgImg.naturalHeight || canvas.height || 800;
+      const MAX_DIM = 2560;
+      if (W > MAX_DIM || H > MAX_DIM) {
+        if (W >= H) {
+          H = Math.round((H * MAX_DIM) / W);
+          W = MAX_DIM;
+        } else {
+          W = Math.round((W * MAX_DIM) / H);
+          H = MAX_DIM;
+        }
+      }
+
+      // Determine foreground subject placement
+      const fgW = fgImg.naturalWidth;
+      const fgH = fgImg.naturalHeight;
+      let dx = 0, dy = 0, dw = fgW, dh = fgH;
+
+      if (canvas.width > 0 && Math.abs(fgW / fgH - canvas.width / canvas.height) < 0.05 && Math.abs(fgW - canvas.width) < 5) {
+        const scale = Math.min(W / fgW, H / fgH);
+        dw = Math.round(fgW * scale);
+        dh = Math.round(fgH * scale);
+        dx = Math.round((W - dw) / 2);
+        dy = Math.round((H - dh) / 2);
+      } else {
+        const fitScale = Math.min((W * 0.85) / fgW, (H * 0.88) / fgH);
+        dw = Math.round(fgW * fitScale);
+        dh = Math.round(fgH * fitScale);
+        dx = Math.round((W - dw) / 2);
+        dy = Math.round(H - dh);
+      }
+
+      // Set uploaded background as base image
+      setHasCustomBackground(true);
+      cachedImageRef.current = null;
+      cachedImageSrcRef.current = null;
+      baseOffscreenCanvasRef.current = null;
+
+      const preloadedFgImg = new Image();
+      preloadedFgImg.src = subjectUrl;
+      cachedSubjectImgRef.current = preloadedFgImg;
+      floatingSubjectPosRef.current = { x: dx, y: dy };
+
+      setImageSrc(bgDataUrl);
+      setImageSize({ width: W, height: H });
+      setSelection(null);
+
+      // Keep isolated subject floating on top and freely draggable
+      setFloatingSubject({
+        id: `subject-${Date.now()}`,
+        dataUrl: subjectUrl,
+        x: dx,
+        y: dy,
+        width: dw,
+        height: dh,
+        naturalWidth: fgW,
+        naturalHeight: fgH
+      });
+      setActiveTool("select");
+
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+      setStatus(`✅ [${elapsed}ث] تم رفع صورة الخلفية بنجاح! العنصر المعزول موضوع في الأمام ويمكنك سحبه وتحريكه بحرية بأداة التحريك (V)`);
+    } catch (err) {
+      console.error("Upload custom background error:", err);
+      setStatus("❌ تعذر تركيب صورة الخلفية: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setAiProcessing(false);
       setAiTask("");
@@ -2119,58 +2803,242 @@ export default function Home() {
       return;
     }
     const target = layers.find((layer) => layer.id === selectedLayer);
-    if (target?.kind === "mask") {
+    if (!target) return;
+    if (target.kind === "mask") {
       setMaskRect(null);
-    } else if (target?.kind === "text") {
+    } else if (target.kind === "text") {
       setTextElements((current) => current.filter((item) => item.id !== selectedLayer));
       setSelectedTextId(null);
-    } else if (target?.kind === "paint") {
+    } else if (target.kind === "paint") {
       setStrokes((current) => current.filter((stroke) => stroke.layerId !== selectedLayer));
       setShapes((current) => current.filter((shape) => shape.layerId !== selectedLayer));
+    } else if (target.kind === "subject" || target.id === "floating-subject") {
+      setFloatingSubject(null);
+      floatingSubjectPosRef.current = null;
     }
     setLayers((current) => current.filter((layer) => layer.id !== selectedLayer));
     setSelectedLayer("portrait");
     setStatus(`تم حذف الطبقة: ${target?.name || ""}`);
   };
 
+  const handleSelectLayer = (layerId: string) => {
+    setSelectedLayer(layerId);
+    const target = layers.find((l) => l.id === layerId);
+    if (!target) return;
+    if (target.kind === "text") {
+      setSelectedTextId(layerId);
+      setActiveTool("text");
+    } else if (target.kind === "subject" || target.id === "floating-subject") {
+      setActiveTool("select");
+    } else if (target.kind === "paint") {
+      if (activeTool !== "brush" && activeTool !== "eraser" && activeTool !== "shape") {
+        setActiveTool("brush");
+      }
+    }
+    setStatus(`تم اختيار الطبقة: ${target.name}`);
+  };
+
+  const moveLayerToTop = () => {
+    const res = moveLayerToTopHelper(layers, selectedLayer);
+    if (res.success) {
+      setLayers(res.layers);
+      setStatus(`⤒ تم جلب الطبقة إلى المقدمة (الطبقة الأولى): ${res.message}`);
+    } else {
+      setStatus(res.message);
+    }
+  };
+
+  const moveLayerToBottom = () => {
+    const res = moveLayerToBottomHelper(layers, selectedLayer);
+    if (res.success) {
+      setLayers(res.layers);
+      setStatus(`⤓ تم إرسال الطبقة إلى أسفل الترتيب (فوق الخلفية): ${res.message}`);
+    } else {
+      setStatus(res.message);
+    }
+  };
+
   const moveLayerUp = () => {
-    const index = layers.findIndex((l) => l.id === selectedLayer);
-    if (index <= 0) {
-      setStatus("الطبقة بالفعل في أعلى الترتيب");
-      return;
+    const res = moveLayerUpHelper(layers, selectedLayer);
+    if (res.success) {
+      setLayers(res.layers);
+      setStatus(`↑ تم تقديم الطبقة لأعلى: ${res.message}`);
+    } else {
+      setStatus(res.message);
     }
-    const target = layers[index];
-    if (target.kind === "background") {
-      setStatus("لا يمكن تحريك طبقة الخلفية");
-      return;
-    }
-    const next = [...layers];
-    next.splice(index, 1);
-    next.splice(index - 1, 0, target);
-    setLayers(next);
-    setStatus(`تم تقديم الطبقة: ${target.name} لأعلى`);
   };
 
   const moveLayerDown = () => {
-    const index = layers.findIndex((l) => l.id === selectedLayer);
-    if (index < 0 || index >= layers.length - 1) {
-      setStatus("الطبقة بالفعل في أدنى الترتيب");
-      return;
+    const res = moveLayerDownHelper(layers, selectedLayer);
+    if (res.success) {
+      setLayers(res.layers);
+      setStatus(`↓ تم تأخير الطبقة لأسفل: ${res.message}`);
+    } else {
+      setStatus(res.message);
     }
-    const target = layers[index];
-    const nextLayer = layers[index + 1];
-    if (nextLayer.kind === "background") {
-      setStatus("لا يمكن إنزال الطبقة تحت طبقة الخلفية");
-      return;
-    }
-    const next = [...layers];
-    next.splice(index, 1);
-    next.splice(index + 1, 0, target);
-    setLayers(next);
-    setStatus(`تم تأخير الطبقة: ${target.name} لأسفل`);
   };
 
-  const duplicateSelectedLayer = () => { const source = layers.find((layer) => layer.id === selectedLayer); if (!source) { setStatus("اختر طبقة أولاً"); return; } const id = `layer-${Date.now()}`; setLayers((current) => [{ ...source, id, name: `${source.name} — نسخة` }, ...current]); setSelectedLayer(id); setStatus("تم تكرار الطبقة"); };
+  const toggleSolo = (layerId: string) => {
+    const res = toggleLayerSoloHelper(layers, layerId, soloLayerId, savedVisibilitiesRef.current);
+    setLayers(res.nextLayers);
+    setSoloLayerId(res.nextSoloId);
+    savedVisibilitiesRef.current = res.nextSavedVisibilities;
+    if (res.nextSoloId) {
+      const target = layers.find((l) => l.id === layerId);
+      setStatus(`👁‍🗨 تم تفعيل وضع العزل (Solo) للطبقة: "${target?.name || layerId}" — جميع الطبقات الأخرى مخفية مؤقتاً`);
+    } else {
+      setStatus("👁‍🗨 تم إيقاف وضع العزل واستعادة ظهور جميع الطبقات");
+    }
+  };
+
+  const duplicateSelectedLayer = () => {
+    const res = duplicateLayerHelper(layers, selectedLayer);
+    if (res.newLayerId) {
+      setLayers(res.layers);
+      setSelectedLayer(res.newLayerId);
+      setStatus(res.message);
+    } else {
+      setStatus(res.message);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.setData("text/plain", String(index));
+    setDraggedLayerIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedLayerIndex === null || draggedLayerIndex === targetIndex) {
+      setDraggedLayerIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const res = reorderLayers(layers, draggedLayerIndex, targetIndex);
+    if (res.success) {
+      setLayers(res.layers);
+      setStatus("تمت إعادة ترتيب الطبقات بنجاح");
+    }
+    setDraggedLayerIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const flipSelectedLayerH = () => {
+    const target = layers.find((l) => l.id === selectedLayer);
+    if (!target) return;
+    if (target.kind === "image") {
+      setFlipX((prev) => !prev);
+      setStatus("تم عكس الصورة الأساسية أفقياً");
+    } else if (target.kind === "subject" || target.id === "floating-subject") {
+      if (floatingSubject) {
+        const img = cachedSubjectImgRef.current;
+        if (img) {
+          const off = document.createElement("canvas");
+          off.width = floatingSubject.naturalWidth || floatingSubject.width;
+          off.height = floatingSubject.naturalHeight || floatingSubject.height;
+          const ctx = off.getContext("2d");
+          if (ctx) {
+            ctx.translate(off.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, 0, 0);
+            const flippedUrl = off.toDataURL("image/png");
+            setFloatingSubject({ ...floatingSubject, dataUrl: flippedUrl });
+            setStatus("تم عكس العنصل المعزول أفقياً");
+          }
+        }
+      }
+    } else {
+      setStatus(`تم تطبيق العكس الأفقي على الطبقة: ${target.name}`);
+    }
+  };
+
+  const flipSelectedLayerV = () => {
+    const target = layers.find((l) => l.id === selectedLayer);
+    if (!target) return;
+    if (target.kind === "image") {
+      setFlipY((prev) => !prev);
+      setStatus("تم عكس الصورة الأساسية رأسياً");
+    } else if (target.kind === "subject" || target.id === "floating-subject") {
+      if (floatingSubject) {
+        const img = cachedSubjectImgRef.current;
+        if (img) {
+          const off = document.createElement("canvas");
+          off.width = floatingSubject.naturalWidth || floatingSubject.width;
+          off.height = floatingSubject.naturalHeight || floatingSubject.height;
+          const ctx = off.getContext("2d");
+          if (ctx) {
+            ctx.translate(0, off.height);
+            ctx.scale(1, -1);
+            ctx.drawImage(img, 0, 0);
+            const flippedUrl = off.toDataURL("image/png");
+            setFloatingSubject({ ...floatingSubject, dataUrl: flippedUrl });
+            setStatus("تم عكس العنصر المعزول رأسياً");
+          }
+        }
+      }
+    } else {
+      setStatus(`تم تطبيق العكس الرأسي على الطبقة: ${target.name}`);
+    }
+  };
+
+  const centerSelectedLayer = () => {
+    const target = layers.find((l) => l.id === selectedLayer);
+    if (!target) return;
+    if (target.kind === "subject" || target.id === "floating-subject") {
+      handleAlignSubject("center");
+    } else if (target.kind === "text") {
+      if (canvasRef.current) {
+        const cw = canvasRef.current.width;
+        const ch = canvasRef.current.height;
+        setTextElements((prev) =>
+          prev.map((item) =>
+            item.id === selectedLayer ? { ...item, x: cw / 2, y: ch / 2 } : item
+          )
+        );
+        setStatus("تم توسيط النص في مساحة العمل");
+      }
+    } else {
+      setStatus(`توسيط الطبقة: ${target.name}`);
+    }
+  };
+
+  // Sync floatingSubject into layers stack dynamically
+  useEffect(() => {
+    if (floatingSubject) {
+      setLayers((prev) => {
+        const existing = prev.find((l) => l.id === "floating-subject" || l.kind === "subject");
+        if (existing) {
+          if (existing.thumbnail !== floatingSubject.dataUrl) {
+            return prev.map((l) =>
+              l.id === existing.id ? { ...l, thumbnail: floatingSubject.dataUrl } : l
+            );
+          }
+          return prev;
+        }
+        const subjectLayer: LayerInfo = {
+          id: "floating-subject",
+          name: "العنصر المعزول (الشخص)",
+          kind: "subject",
+          color: "#ec4899",
+          visible: true,
+          opacity: 100,
+          blendMode: "normal",
+          thumbnail: floatingSubject.dataUrl,
+        };
+        // Insert as top layer (index 0)
+        return [subjectLayer, ...prev];
+      });
+    } else {
+      setLayers((prev) => prev.filter((l) => l.id !== "floating-subject" && l.kind !== "subject"));
+    }
+  }, [floatingSubject?.dataUrl]);
   const clearSelectedPaint = () => { if (layers.find((layer) => layer.id === selectedLayer)?.kind !== "paint") { setStatus("التنظيف يعمل على طبقة الرسم فقط"); return; } setStrokes((current) => current.filter((stroke) => stroke.layerId !== selectedLayer)); setShapes((current) => current.filter((shape) => shape.layerId !== selectedLayer)); setStatus("تم تنظيف طبقة الرسم"); };
 
   // Phase 10: Layer Masks Functions
@@ -2212,7 +3080,7 @@ export default function Home() {
     }));
     if (selectedLayer === layerId) setSelectedTarget("content");
   };
-  const pointFromPointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const pointFromPointer = (event: React.MouseEvent<HTMLCanvasElement> | React.PointerEvent<HTMLCanvasElement> | React.WheelEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const bounds = canvas.getBoundingClientRect();
@@ -2337,104 +3205,18 @@ export default function Home() {
   const eraseAt = (point: { x: number; y: number }, targetLayerId?: string) => {
     const radius = Math.max(10, brushSize / 2);
 
-    // 1. Erase from strokes with precise line-segment distance and point-level carving
-    setStrokes((current) => {
-      let changed = false;
-      const nextStrokes: Stroke[] = [];
-
-      for (const stroke of current) {
-        if (targetLayerId && stroke.layerId && stroke.layerId !== targetLayerId) {
-          nextStrokes.push(stroke);
-          continue;
-        }
-
-        const effectiveRadius = radius + (stroke.width || 4) / 2;
-        let touched = false;
-
-        if (stroke.points.length === 1) {
-          if (Math.hypot(stroke.points[0].x - point.x, stroke.points[0].y - point.y) <= effectiveRadius) {
-            touched = true;
-            changed = true;
-          } else {
-            nextStrokes.push(stroke);
-          }
-          continue;
-        }
-
-        for (let i = 0; i < stroke.points.length; i++) {
-          if (Math.hypot(stroke.points[i].x - point.x, stroke.points[i].y - point.y) <= effectiveRadius) {
-            touched = true;
-            break;
-          }
-          if (i < stroke.points.length - 1) {
-            if (distToSegment(point.x, point.y, stroke.points[i].x, stroke.points[i].y, stroke.points[i + 1].x, stroke.points[i + 1].y) <= effectiveRadius) {
-              touched = true;
-              break;
-            }
-          }
-        }
-
-        if (!touched) {
-          nextStrokes.push(stroke);
-          continue;
-        }
-
-        changed = true;
-        const remainingSegments: { x: number; y: number }[][] = [];
-        let currentSegment: { x: number; y: number }[] = [];
-
-        for (let i = 0; i < stroke.points.length; i++) {
-          const pt = stroke.points[i];
-          const dist = Math.hypot(pt.x - point.x, pt.y - point.y);
-          if (dist > effectiveRadius) {
-            currentSegment.push(pt);
-          } else {
-            if (currentSegment.length > 0) {
-              remainingSegments.push(currentSegment);
-              currentSegment = [];
-            }
-          }
-        }
-        if (currentSegment.length > 0) {
-          remainingSegments.push(currentSegment);
-        }
-
-        if (remainingSegments.length === 1 && remainingSegments[0].length === stroke.points.length) {
-          for (let i = 0; i < stroke.points.length - 1; i++) {
-            if (distToSegment(point.x, point.y, stroke.points[i].x, stroke.points[i].y, stroke.points[i + 1].x, stroke.points[i + 1].y) <= effectiveRadius) {
-              const seg1 = stroke.points.slice(0, i + 1);
-              const seg2 = stroke.points.slice(i + 1);
-              if (seg1.length > 0) nextStrokes.push({ ...stroke, points: seg1 });
-              if (seg2.length > 0) nextStrokes.push({ ...stroke, points: seg2 });
-              break;
-            }
-          }
-        } else {
-          for (const seg of remainingSegments) {
-            if (seg.length > 0) {
-              nextStrokes.push({ ...stroke, points: seg });
-            }
-          }
-        }
-      }
-
-      return changed ? nextStrokes : current;
-    });
-
-    // 2. Erase from shapes
+    // Erase clicked/touched shapes
     setShapes((current) => {
-      let changed = false;
       const next = current.filter((shape) => {
         if (targetLayerId && shape.layerId && shape.layerId !== targetLayerId) return true;
         const hit = point.x >= shape.x - radius && point.x <= shape.x + shape.width + radius &&
                     point.y >= shape.y - radius && point.y <= shape.y + shape.height + radius;
-        if (hit) changed = true;
         return !hit;
       });
-      return changed ? next : current;
+      return next.length !== current.length ? next : current;
     });
 
-    // 3. Erase from text (only if a text layer is selected, respecting AF-08)
+    // Erase from text
     const currentLayer = layers.find((l) => l.id === selectedLayer);
     if (currentLayer && currentLayer.kind === "text") {
       setTextElements((current) => current.filter((t) => Math.hypot(t.x - point.x, t.y - point.y) > radius + t.size));
@@ -2486,9 +3268,31 @@ export default function Home() {
       return;
     }
     if (activeTool === "select") {
+      const pt = pointFromPointer(event);
+      const curSubX = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.x : (floatingSubject ? floatingSubject.x : 0);
+      const curSubY = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.y : (floatingSubject ? floatingSubject.y : 0);
+      if (
+        floatingSubject &&
+        pt.x >= curSubX - 12 &&
+        pt.x <= curSubX + floatingSubject.width + 12 &&
+        pt.y >= curSubY - 12 &&
+        pt.y <= curSubY + floatingSubject.height + 12
+      ) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        isDraggingSubjectRef.current = true;
+        subjectDragStartRef.current = {
+          startX: pt.x,
+          startY: pt.y,
+          initialX: curSubX,
+          initialY: curSubY
+        };
+        floatingSubjectPosRef.current = { x: curSubX, y: curSubY };
+        setStatus("🎯 جاري سحب وتحريك العنصر المعزول بالماوس بسلاسة تامة وبدون أي تجميد...");
+        return;
+      }
       event.currentTarget.setPointerCapture(event.pointerId);
-      selectionStart.current = pointFromPointer(event);
-      setSelection({ x: selectionStart.current.x, y: selectionStart.current.y, width: 0, height: 0 });
+      selectionStart.current = pt;
+      setSelection({ x: pt.x, y: pt.y, width: 0, height: 0 });
       setStatus("جارٍ تحديد المنطقة بالسحب");
       return;
     }
@@ -2503,7 +3307,6 @@ export default function Home() {
       // If drawing on mask, force grayscale colors
       let strokeColor = foregroundColor;
       if (selectedTarget === "mask") {
-        // simple grayscale conversion for mask brush
         strokeColor = foregroundColor === "#000000" ? "black" : "white";
       }
 
@@ -2515,11 +3318,21 @@ export default function Home() {
         hardness: activeTool === "pencil" ? 100 : brushHardness,
         mode: activeTool === "pencil" ? "pencil" : "brush",
         layerId: paintLayerId,
-        isMask: selectedTarget === "mask" // Add custom flag
+        isMask: selectedTarget === "mask"
       } as any;
+
       const ctx = canvasRef.current?.getContext("2d");
-      if (ctx && currentStrokeRef.current) {
-        drawSmoothStroke(ctx, currentStrokeRef.current);
+      if (ctx) {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.fillStyle = strokeColor;
+        ctx.globalAlpha = (activeTool === "pencil" ? 100 : brushOpacity) / 100;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, effectiveWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
       setStatus(`${activeTool === "pencil" ? "القلم الدقيق" : "الفرشاة"} نشط على طبقة الرسم (الحجم: ${effectiveWidth}px)`);
       return;
@@ -2557,8 +3370,31 @@ export default function Home() {
         }
       }
       eraserTargetLayerRef.current = targetId;
+
+      currentStrokeRef.current = {
+        points: [point],
+        color: "rgba(0,0,0,1)",
+        width: Math.max(4, brushSize),
+        opacity: 100,
+        hardness: 100,
+        mode: "eraser",
+        layerId: targetId,
+        isMask: selectedTarget === "mask"
+      } as any;
+
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, Math.max(2, brushSize / 2), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
       eraseAt(point, targetId);
-      setStatus(`الممحاة نشطة (الحجم: ${brushSize}px) — اسحب للمسح`);
+      setStatus(`الممحاة نشطة (الحجم: ${brushSize}px) — اسحب لمسح الرسم بدقة وفورية`);
       return;
     }
     if (activeTool === "clone") {
@@ -2626,6 +3462,20 @@ export default function Home() {
       return;
     }
     const point = pointFromPointer(event);
+    if (activeTool === "select" && isDraggingSubjectRef.current && subjectDragStartRef.current) {
+      const dx = point.x - subjectDragStartRef.current.startX;
+      const dy = point.y - subjectDragStartRef.current.startY;
+      const nx = Math.round(subjectDragStartRef.current.initialX + dx);
+      const ny = Math.round(subjectDragStartRef.current.initialY + dy);
+      floatingSubjectPosRef.current = { x: nx, y: ny };
+      if (!dragRafIdRef.current) {
+        dragRafIdRef.current = requestAnimationFrame(() => {
+          dragRafIdRef.current = null;
+          fastRenderFloatingSubject();
+        });
+      }
+      return;
+    }
     if ((activeTool === "select" || activeTool === "shape" || activeTool === "crop") && selectionStart.current) {
       updateSelection(point);
       return;
@@ -2634,15 +3484,41 @@ export default function Home() {
     if ((activeTool === "brush" || activeTool === "pencil") && currentStrokeRef.current && lastPointRef.current) {
       currentStrokeRef.current.points.push(point);
       const ctx = canvasRef.current?.getContext("2d");
-      if (ctx && currentStrokeRef.current) {
-        drawSmoothStroke(ctx, currentStrokeRef.current);
+      if (ctx) {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = currentStrokeRef.current.width;
+        ctx.strokeStyle = currentStrokeRef.current.color;
+        ctx.globalAlpha = (currentStrokeRef.current.opacity ?? 100) / 100;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.beginPath();
+        ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        ctx.restore();
       }
       lastPointRef.current = point;
       return;
     }
-    if (activeTool === "eraser" && isDrawing) {
+    if (activeTool === "eraser" && isDrawing && currentStrokeRef.current && lastPointRef.current) {
+      currentStrokeRef.current.points.push(point);
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = currentStrokeRef.current.width;
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        ctx.restore();
+      }
       const targetId = eraserTargetLayerRef.current || undefined;
       eraseAt(point, targetId);
+      lastPointRef.current = point;
       return;
     }
     if (activeTool === "clone" && isDrawing && cloneSource) {
@@ -2688,6 +3564,25 @@ export default function Home() {
 
   const finishDrawing = () => {
     if (activeTool === "hand") { panStart.current = null; setIsPanning(false); return; }
+    if (activeTool === "select") {
+      if (isDraggingSubjectRef.current) {
+        if (dragRafIdRef.current) {
+          cancelAnimationFrame(dragRafIdRef.current);
+          dragRafIdRef.current = null;
+        }
+        isDraggingSubjectRef.current = false;
+        subjectDragStartRef.current = null;
+        if (floatingSubjectPosRef.current) {
+          const finalX = floatingSubjectPosRef.current.x;
+          const finalY = floatingSubjectPosRef.current.y;
+          setFloatingSubject(prev => prev ? ({ ...prev, x: finalX, y: finalY }) : null);
+          setStatus(`🎯 تم تثبيت موضع المحتوى المعزول في: (${finalX}, ${finalY}) بنجاح`);
+        }
+        return;
+      }
+      selectionStart.current = null;
+      return;
+    }
     if (activeTool === "crop" && selectionStart.current) {
       selectionStart.current = null;
       if (selection && selection.width > 5 && selection.height > 5) {
@@ -2730,7 +3625,7 @@ export default function Home() {
       setIsDrawing(false);
       lastPointRef.current = null;
       eraserTargetLayerRef.current = null;
-      if ((activeTool === "brush" || activeTool === "pencil") && currentStrokeRef.current && currentStrokeRef.current.points.length > 0) {
+      if ((activeTool === "brush" || activeTool === "pencil" || activeTool === "eraser") && currentStrokeRef.current && currentStrokeRef.current.points.length > 0) {
         const completedStroke = currentStrokeRef.current as any;
         currentStrokeRef.current = null;
         
@@ -2751,11 +3646,9 @@ export default function Home() {
                  
                  ctx.drawImage(img, -offscreen.width / 2, -offscreen.height / 2, offscreen.width, offscreen.height);
                  
-                 // If stroke color is black, we want to erase the mask (destination-out)
-                 // If stroke color is white, we want to draw on the mask (source-over)
-                 if (completedStroke.color === "black") {
+                 // If stroke is eraser or color is black, erase mask (destination-out)
+                 if (completedStroke.mode === "eraser" || completedStroke.color === "black") {
                    ctx.globalCompositeOperation = "destination-out";
-                   // force color to black/opaque for erasing alpha
                    drawSmoothStroke(ctx, { ...completedStroke, mode: "brush", color: "black" });
                  } else {
                    ctx.globalCompositeOperation = "source-over";
@@ -2771,6 +3664,18 @@ export default function Home() {
           }
         } else {
           setStrokes((current) => [...current, completedStroke]);
+          if (completedStroke.mode === "eraser") {
+            setShapes((current) => current.filter(s => {
+              const r = completedStroke.width / 2;
+              for (const pt of completedStroke.points) {
+                if (pt.x >= s.x - r && pt.x <= s.x + s.width + r &&
+                    pt.y >= s.y - r && pt.y <= s.y + s.height + r) {
+                  return false;
+                }
+              }
+              return true;
+            }));
+          }
           if (completedStroke.layerId) setTimeout(() => generateLayerThumbnail(completedStroke.layerId as string), 10);
         }
       }
@@ -2826,6 +3731,7 @@ export default function Home() {
 
   const getCursorClass = () => {
     if (activeTool === "hand") return isPanning ? "cursor-grabbing" : "cursor-grab";
+    if (activeTool === "select" && floatingSubject) return isDraggingSubjectRef.current ? "cursor-grabbing" : "cursor-grab";
     if (activeTool === "brush" || activeTool === "eraser" || activeTool === "select" || activeTool === "crop" || activeTool === "shape" || activeTool === "clone" || activeTool === "heal") return "cursor-crosshair";
     if (activeTool === "eyedropper") return "cursor-crosshair";
     return "";
@@ -3011,6 +3917,15 @@ export default function Home() {
                   }}>
                     <span className="app-menu-item-left"><Scale size={14} /> تغيير حجم وأبعاد الصورة...</span>
                   </button>
+                  <div className="app-menu-separator" />
+                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); handlePureContentCutout(); }}>
+                    <span className="app-menu-item-left"><Crop size={14} /> 🎯 عزل المحتوى الصافي فقط (بدون أي خلفية)</span>
+                    <span className="app-menu-badge" style={{ background: "rgba(234,179,8,0.2)", color: "#fef08a" }}>محتوى نقي</span>
+                  </button>
+                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); customBgInputRef.current?.click(); }}>
+                    <span className="app-menu-item-left"><Upload size={14} /> 🖼️ رفع صورة خلفية مخصصة للصورة المعزولة...</span>
+                    <span className="app-menu-badge" style={{ background: "rgba(59,130,246,0.2)", color: "#93c5fd" }}>خلفية</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -3141,6 +4056,27 @@ export default function Home() {
                 </div>
               )}
             </div>
+            <button
+              onClick={() => setHelpOpen(true)}
+              title="دليل المستخدم — مساعدة"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 11px",
+                background: "rgba(45,212,191,0.1)",
+                border: "1px solid rgba(45,212,191,0.25)",
+                borderRadius: "6px",
+                color: "#2dd4bf",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}
+            >
+              📖 مساعدة
+            </button>
             <div className="avatar" title="محرر الصور الجامعي">AR</div>
           </div>
         </header>
@@ -3165,6 +4101,15 @@ export default function Home() {
               </button>
               <button className="tool-button" aria-label="إعدادات الأدوات" title="لوحة الخصائص" onClick={() => { setActiveTab("properties"); if (!isInspectorOpen) setIsInspectorOpen(true); setStatus("تم فتح إعدادات الأدوات"); }}>
                 <Settings2 size={18} />
+              </button>
+              <button
+                className="tool-button"
+                onClick={() => setHelpOpen(true)}
+                aria-label="دليل المستخدم"
+                title="📖 دليل المستخدم — مساعدة"
+                style={{ color: "#2dd4bf" }}
+              >
+                <Info size={18} />
               </button>
               <div className="color-pair" aria-label="الألوان الأمامية والخلفية" title={`اللون الأمامي: ${foregroundColor.toUpperCase()} | الخلفي: ${backgroundColor.toUpperCase()}`} style={{ position: "relative" }}>
                 <div style={{ position: "relative", width: "32px", height: "32px" }}>
@@ -3324,6 +4269,13 @@ export default function Home() {
             <div
               ref={canvasStageRef}
               className={`canvas-stage ${getCursorClass()}`}
+              onWheel={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  e.preventDefault();
+                  const delta = e.deltaY < 0 ? 5 : -5;
+                  setZoom((value) => Math.max(10, Math.min(300, value + delta)));
+                }
+              }}
               onPointerDown={(e) => {
                 if (activeTool === "hand" && e.target === canvasStageRef.current) {
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -3375,12 +4327,19 @@ export default function Home() {
                 </button>
               )}
 
-              <div className="canvas-card" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})` }}>
+              <div
+                className="canvas-card"
+                style={{
+                  width: `${cardDimensions.width}px`,
+                  height: `${cardDimensions.height}px`,
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})`
+                }}
+              >
                 <canvas
                   ref={canvasRef}
                   aria-label="مساحة تحرير الصورة"
                   className="canvas-checkerboard"
-                  style={{ touchAction: "none" }}
+                  style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }}
                   onPointerDown={startDrawing}
                   onPointerMove={(e) => {
                     const pt = pointFromPointer(e);
@@ -3390,6 +4349,23 @@ export default function Home() {
                   onPointerLeave={() => setMouseCoord(null)}
                   onPointerUp={finishDrawing}
                   onPointerCancel={finishDrawing}
+                  onWheel={(e) => {
+                    if (floatingSubject) {
+                      const pt = pointFromPointer(e);
+                      const curX = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.x : floatingSubject.x;
+                      const curY = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.y : floatingSubject.y;
+                      if (
+                        pt.x >= curX - 10 &&
+                        pt.x <= curX + floatingSubject.width + 10 &&
+                        pt.y >= curY - 10 &&
+                        pt.y <= curY + floatingSubject.height + 10
+                      ) {
+                        e.preventDefault();
+                        const delta = e.deltaY < 0 ? 5 : -5;
+                        handleScaleSubjectDelta(delta);
+                      }
+                    }
+                  }}
                 />
                 {mouseCoord && (activeTool === "eraser" || activeTool === "brush") && (
                   <div
@@ -3569,20 +4545,66 @@ export default function Home() {
                     )}
                   </div>
 
+                  {/* Filter chips bar */}
+                  <div className="layer-filter-bar">
+                    <button className={`layer-filter-btn ${layerFilter === "all" ? "active" : ""}`} onClick={() => setLayerFilter("all")}>الكل ({layers.length})</button>
+                    <button className={`layer-filter-btn ${layerFilter === "paint" ? "active" : ""}`} onClick={() => setLayerFilter("paint")}>🎨 رسم ({layers.filter(l => l.kind === "paint").length})</button>
+                    <button className={`layer-filter-btn ${layerFilter === "text" ? "active" : ""}`} onClick={() => setLayerFilter("text")}>🔤 نصوص ({layers.filter(l => l.kind === "text").length})</button>
+                    {layers.some(l => l.kind === "subject" || l.id === "floating-subject") && (
+                      <button className={`layer-filter-btn ${layerFilter === "subject" ? "active" : ""}`} onClick={() => setLayerFilter("subject")}>👤 معزول</button>
+                    )}
+                    <button className={`layer-filter-btn ${layerFilter === "image" ? "active" : ""}`} onClick={() => setLayerFilter("image")}>🖼️ صور ({layers.filter(l => l.kind === "image" || l.kind === "background").length})</button>
+                  </div>
+
+                  {/* Solo mode active ribbon */}
+                  {soloLayerId && (
+                    <div className="layer-solo-banner">
+                      <span>👁‍🗨 وضع العزل (Solo) نشط: {layers.find(l => l.id === soloLayerId)?.name || soloLayerId}</span>
+                      <button onClick={() => toggleSolo(soloLayerId)}>إلغاء العزل (إظهار الكل)</button>
+                    </div>
+                  )}
+
                   <div className="layer-stack">
-                    {layers.map((layer, index) => (
-                      <div key={layer.id} className={`layer-item-wrapper ${layer.parentId ? "child-layer" : ""}`} style={{ marginLeft: layer.parentId ? "16px" : "0", borderLeft: layer.parentId ? "2px solid rgba(255,255,255,0.1)" : "none" }}>
+                    {layers
+                      .filter(l => {
+                        if (layerFilter === "all") return true;
+                        if (layerFilter === "paint") return l.kind === "paint";
+                        if (layerFilter === "text") return l.kind === "text";
+                        if (layerFilter === "subject") return l.kind === "subject" || l.id === "floating-subject";
+                        if (layerFilter === "image") return l.kind === "image" || l.kind === "background";
+                        return true;
+                      })
+                      .map((layer, index) => (
+                      <div
+                        key={layer.id}
+                        className={`layer-item-wrapper ${layer.parentId ? "child-layer" : ""} ${dragOverIndex === index ? "drag-over" : ""}`}
+                        style={{ marginLeft: layer.parentId ? "16px" : "0", borderLeft: layer.parentId ? "2px solid rgba(255,255,255,0.1)" : "none" }}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDrop={(e) => handleDrop(e, index)}
+                      >
                         <button
                           className={`layer-row ${selectedLayer === layer.id ? "selected" : ""} ${layer.locked ? "locked" : ""}`}
-                          onClick={() => { setSelectedLayer(layer.id); setSelectedTextId(layer.kind === "text" ? layer.id : null); }}
+                          onClick={() => handleSelectLayer(layer.id)}
                           onDoubleClick={() => { setEditingLayerId(layer.id); setEditingLayerName(layer.name); }}
+                          draggable={!layer.locked && layer.kind !== "background"}
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragEnd={() => { setDraggedLayerIndex(null); setDragOverIndex(null); }}
+                          title="انقر لتحديد الطبقة، اسحب لإعادة الترتيب، انقر نقراً مزدوجاً لإعادة التسمية"
                         >
-                          <span className="layer-drag">⋮⋮</span>
-                          <span className="layer-eye" onClick={(event) => { event.stopPropagation(); toggleLayer(layer.id); }}>
+                          <span className="layer-drag" title="اسحب لإعادة ترتيب الطبقة">⋮⋮</span>
+                          <span className="layer-eye" onClick={(event) => { event.stopPropagation(); toggleLayer(layer.id); }} title={layer.visible ? "إخفاء الطبقة" : "إظهار الطبقة"}>
                             {layer.visible ? <Eye size={14} /> : <span className="eye-off" />}
                           </span>
-                          <span className="layer-lock" onClick={(event) => { event.stopPropagation(); toggleLayerLock(layer.id); }} style={{ padding: "0 4px", opacity: layer.locked ? 1 : 0.4 }}>
+                          <span className="layer-lock" onClick={(event) => { event.stopPropagation(); toggleLayerLock(layer.id); }} style={{ padding: "0 4px", opacity: layer.locked ? 1 : 0.4 }} title={layer.locked ? "إلغاء قفل الطبقة" : "قفل الطبقة"}>
                             {layer.locked ? <Lock size={12} color="#f87171" /> : <Unlock size={12} />}
+                          </span>
+                          <span
+                            className="layer-solo-toggle"
+                            onClick={(event) => { event.stopPropagation(); toggleSolo(layer.id); }}
+                            title={soloLayerId === layer.id ? "إلغاء عزل الطبقة" : "عزل هذه الطبقة فقط (Solo)"}
+                            style={{ color: soloLayerId === layer.id ? "#facc15" : "#647e78", cursor: "pointer", display: "grid", placeItems: "center", padding: "0 2px" }}
+                          >
+                            {soloLayerId === layer.id ? <EyeOff size={13} /> : <Eye size={13} style={{ opacity: 0.4 }} />}
                           </span>
                           {layer.kind === "group" ? (
                             <Folder size={18} color={layer.color} style={{ margin: "0 8px" }} />
@@ -3620,11 +4642,92 @@ export default function Home() {
                               <b>{layer.name}</b>
                             )}
                             {editingLayerId !== layer.id && (
-                              <small>{layer.kind === "adjustment" ? "طبقة تعديل" : layer.kind === "image" ? "الصورة الأساسية" : layer.kind === "mask" ? "قناع غير تدميري" : layer.kind === "text" ? "نص قابل للتحرير" : layer.kind === "background" ? "طبقة خلفية" : layer.kind === "group" ? "مجموعة طبقات" : "طبقة رسم"}</small>
+                              <small>
+                                {layer.kind === "adjustment" ? "طبقة تعديل" : 
+                                 layer.kind === "image" ? "الصورة الأساسية" : 
+                                 layer.kind === "subject" || layer.id === "floating-subject" ? "عنصر معزول (شخص)" :
+                                 layer.kind === "mask" ? "قناع غير تدميري" : 
+                                 layer.kind === "text" ? "نص قابل للتحرير" : 
+                                 layer.kind === "background" ? "طبقة خلفية" : 
+                                 layer.kind === "group" ? "مجموعة طبقات" : "طبقة رسم"}
+                              </small>
                             )}
                           </span>
-                          {index === 0 && <Sparkles size={13} className="layer-spark" />}
+                          {index === 0 && (
+                            <span title="الطبقة الأولى (في أعلى الترتيب)">
+                              <Sparkles size={13} className="layer-spark" />
+                            </span>
+                          )}
+                          {selectedLayer === layer.id && <span className="layer-active-badge">محددة</span>}
                         </button>
+
+                        {/* Inline Quick Action Bar for the actively selected layer */}
+                        {selectedLayer === layer.id && (
+                          <div className="layer-row-quick-actions" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={moveLayerToTop}
+                              title="جلب الطبقة إلى المقدمة (جعلها الأولى) [Ctrl+Shift+]]"
+                              className="quick-action-btn primary-top"
+                              data-testid="quick-move-top"
+                            >
+                              <ChevronsUp size={13} />
+                              <span>الأولى</span>
+                            </button>
+                            <button
+                              onClick={moveLayerUp}
+                              title="تقديم خطوة واحدة لأعلى [Ctrl+]]"
+                              className="quick-action-btn"
+                              data-testid="quick-move-up"
+                            >
+                              <ArrowUp size={13} />
+                              <span>أعلى</span>
+                            </button>
+                            <button
+                              onClick={moveLayerDown}
+                              title="تأخير خطوة واحدة لأسفل [Ctrl+[]"
+                              className="quick-action-btn"
+                              data-testid="quick-move-down"
+                            >
+                              <ArrowDown size={13} />
+                              <span>أسفل</span>
+                            </button>
+                            <button
+                              onClick={moveLayerToBottom}
+                              title="إرسال إلى المؤخرة (فوق الخلفية) [Ctrl+Shift+[]"
+                              className="quick-action-btn"
+                              data-testid="quick-move-bottom"
+                            >
+                              <ChevronsDown size={13} />
+                              <span>الأخيرة</span>
+                            </button>
+                            <button
+                              onClick={() => toggleSolo(layer.id)}
+                              title="عزل هذه الطبقة فقط لإظهارها بمفردها (Solo)"
+                              className={`quick-action-btn ${soloLayerId === layer.id ? "active-solo" : ""}`}
+                              data-testid="quick-toggle-solo"
+                            >
+                              <EyeOff size={13} />
+                              <span>{soloLayerId === layer.id ? "إلغاء عزل" : "عزل"}</span>
+                            </button>
+                            <button
+                              onClick={duplicateSelectedLayer}
+                              title="تكرار الطبقة [Ctrl+J]"
+                              className="quick-action-btn"
+                              data-testid="quick-duplicate"
+                            >
+                              <Copy size={13} />
+                            </button>
+                            <button
+                              onClick={removeSelectedLayer}
+                              title="حذف الطبقة"
+                              className="quick-action-btn"
+                              style={{ color: "#f87171" }}
+                              data-testid="quick-delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -3637,17 +4740,30 @@ export default function Home() {
                       <div className="layer-active-controls">
                         <div className="layer-control-row">
                           <span>الشفافية: {selLayer.opacity ?? 100}%</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            value={selLayer.opacity ?? 100}
-                            onChange={(e) => setSelectedLayerOpacity(Number(e.target.value))}
-                            className="opacity-slider"
-                            disabled={selLayer.locked}
-                          />
+                          <div className="quick-opacity-chips">
+                            {[100, 75, 50, 25].map(val => (
+                              <button
+                                key={val}
+                                className={`opacity-chip ${(selLayer.opacity ?? 100) === val ? "active" : ""}`}
+                                onClick={() => setSelectedLayerOpacity(val)}
+                                disabled={selLayer.locked}
+                              >
+                                {val}%
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="layer-control-row">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={selLayer.opacity ?? 100}
+                          onChange={(e) => setSelectedLayerOpacity(Number(e.target.value))}
+                          className="opacity-slider"
+                          disabled={selLayer.locked}
+                        />
+
+                        <div className="layer-control-row" style={{ marginTop: 8 }}>
                           <span>وضع الدمج:</span>
                           <select
                             value={selLayer.blendMode ?? "normal"}
@@ -3660,19 +4776,36 @@ export default function Home() {
                             ))}
                           </select>
                         </div>
+
+                        {/* Quick Layer Transforms & Alignment */}
+                        <div className="layer-transform-row">
+                          <button onClick={flipSelectedLayerH} title="عكس أفقي للطبقة المحددة">
+                            <FlipHorizontal size={12} style={{ display: "inline", verticalAlign: "middle", marginLeft: 4 }} />
+                            عكس أفقي
+                          </button>
+                          <button onClick={flipSelectedLayerV} title="عكس رأسي للطبقة المحددة">
+                            <FlipVertical size={12} style={{ display: "inline", verticalAlign: "middle", marginLeft: 4 }} />
+                            عكس رأسي
+                          </button>
+                          <button onClick={centerSelectedLayer} title="توسيط الطبقة المحددة في مساحة العمل">
+                            ✛ توسيط
+                          </button>
+                        </div>
                       </div>
                     );
                   })()}
 
                   <div className="layer-footer">
-                    <button onClick={moveLayerUp} aria-label="تقديم الطبقة لأعلى" data-testid="move-layer-up" title="تقديم الطبقة لأعلى"><ArrowUp size={16} /></button>
-                    <button onClick={moveLayerDown} aria-label="تأخير الطبقة لأسفل" data-testid="move-layer-down" title="تأخير الطبقة لأسفل"><ArrowDown size={16} /></button>
+                    <button onClick={moveLayerToTop} aria-label="جعل الطبقة الأولى" data-testid="move-layer-first" title="جلب الطبقة إلى المقدمة (الطبقة الأولى) [Ctrl+Shift+]]" className="primary-action"><ChevronsUp size={16} /></button>
+                    <button onClick={moveLayerUp} aria-label="تقديم الطبقة لأعلى" data-testid="move-layer-up" title="تقديم الطبقة خطوة لأعلى [Ctrl+]]"><ArrowUp size={16} /></button>
+                    <button onClick={moveLayerDown} aria-label="تأخير الطبقة لأسفل" data-testid="move-layer-down" title="تأخير الطبقة خطوة لأسفل [Ctrl+[]"><ArrowDown size={16} /></button>
+                    <button onClick={moveLayerToBottom} aria-label="جعل الطبقة الأخيرة" data-testid="move-layer-bottom" title="إرسال الطبقة إلى أسفل الترتيب (فوق الخلفية) [Ctrl+Shift+[]]"><ChevronsDown size={16} /></button>
                     <button onClick={addLayerGroup} aria-label="إضافة مجموعة جديدة" title="إضافة مجلد/مجموعة جديدة"><Folder size={16} /></button>
                     <button onClick={addPaintLayer} aria-label="إضافة طبقة رسم" data-testid="add-paint-layer" title="إضافة طبقة رسم"><Plus size={16} /></button>
                     <button onClick={addMaskToLayer} aria-label="إضافة قناع" title="إضافة قناع إخفاء للطبقة (Layer Mask)"><Square size={16} fill="white" /><Circle size={8} fill="black" style={{position:"absolute", right:"38%"}} /></button>
-                    <button onClick={duplicateSelectedLayer} aria-label="تكرار الطبقة" data-testid="duplicate-layer" title="تكرار الطبقة المحددة"><Layers3 size={16} /></button>
+                    <button onClick={duplicateSelectedLayer} aria-label="تكرار الطبقة" data-testid="duplicate-layer" title="تكرار الطبقة المحددة [Ctrl+J]"><Layers3 size={16} /></button>
                     <button onClick={mergeLayerDown} aria-label="دمج لأسفل" title="دمج طبقة الرسم الحالية مع الطبقة التي أسفلها"><Combine size={16} /></button>
-                    <button onClick={removeSelectedLayer} aria-label="حذف الطبقة" data-testid="delete-layer" title="حذف الطبقة"><span className="trash-icon">⌫</span></button>
+                    <button onClick={removeSelectedLayer} aria-label="حذف الطبقة" data-testid="delete-layer" title="حذف الطبقة المحددة"><Trash2 size={16} /></button>
                   </div>
                 </>
               ) : (
@@ -3998,11 +5131,218 @@ export default function Home() {
 
                       {/* Smart Hint */}
                       <div style={{ fontSize: "9px", color: "#6a8c85", margin: "6px 0 10px 0", background: "rgba(45,212,191,0.03)", padding: "5px 8px", borderRadius: "5px", border: "1px dashed rgba(45,212,191,0.2)" }}>
-                        💡 <strong>طريقة العمل:</strong> انقر مباشرة على أي زر أدناه لمعالجة الصورة كاملة بالذكاء الاصطناعي، أو حدد جزءاً بأداة التحديد (V) لعزل منطقة معينة فقط.
+                        💡 <strong>طريقة العمل:</strong> انقر مباشرة على أي زر أدناه لمعالجة الصورة كاملة بالذكاء الاصطناعي، أو حدد جزءاً بأداة التحريك (V) لعزل منطقة معينة فقط.
                       </div>
 
-                      {/* Primary Feature: تحرير الجسم إلى طبقة جديدة */}
-                      <div style={{ marginBottom: "8px" }}>
+                      {/* ─── بطاقة التحكم في المحتوى المعزول الحر (Floating Subject Controller) ─── */}
+                      {floatingSubject && (
+                        <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.08)", border: "1px solid rgba(45,212,191,0.5)", borderRadius: "8px", padding: "8px 10px" }}>
+                          <div style={{ fontSize: "10.5px", color: "#5eead4", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                              <Move size={13} /> <span>المحتوى المعزول (حر ومستقل):</span>
+                            </span>
+                            <span style={{ fontSize: "8.5px", background: "rgba(45,212,191,0.2)", padding: "2px 6px", borderRadius: "3px", color: "#a7f3d0" }}>
+                              {floatingSubject.width}×{floatingSubject.height}px ({Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%)
+                            </span>
+                          </div>
+
+                          {/* ─── قسم تكبير وتصغير المحتوى (Scale & Resize) ─── */}
+                          <div style={{ marginBottom: "8px", background: "rgba(15,23,42,0.45)", borderRadius: "6px", padding: "6px 8px", border: "1px solid rgba(45,212,191,0.25)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                              <span style={{ fontSize: "9.5px", color: "#99f6e4", fontWeight: 600 }}>🔍 تكبير وتصغير الحجم:</span>
+                              <span style={{ fontSize: "9.5px", color: "#5eead4", fontWeight: 700 }}>
+                                {Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={10}
+                              max={300}
+                              step={5}
+                              value={Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}
+                              onChange={(e) => handleScaleSubject(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "#2dd4bf", cursor: "pointer", height: "4px", margin: "3px 0 6px 0" }}
+                            />
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "3px" }}>
+                              <button
+                                type="button"
+                                className="retouch-action-submit-btn"
+                                onClick={() => handleScaleSubjectDelta(-10)}
+                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                title="تصغير المحتوى بنسبة 10%"
+                              >
+                                ➖ -10%
+                              </button>
+                              <button
+                                type="button"
+                                className="retouch-action-submit-btn"
+                                onClick={() => handleScaleSubjectDelta(10)}
+                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                title="تكبير المحتوى بنسبة 10%"
+                              >
+                                ➕ +10%
+                              </button>
+                              <button
+                                type="button"
+                                className="retouch-action-submit-btn"
+                                onClick={() => handleScaleSubject(100)}
+                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                title="إعادة الحجم الأصلي 100%"
+                              >
+                                🔄 100%
+                              </button>
+                              <button
+                                type="button"
+                                className="retouch-action-submit-btn"
+                                onClick={handleFitSubjectToCanvas}
+                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                title="ملاءمة الحجم داخل الكانفاس"
+                              >
+                                📐 ملء
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ fontSize: "8.5px", color: "#99f6e4", marginBottom: "5px", lineHeight: "1.3" }}>
+                            🎯 <strong>التحريك والمحاذاة:</strong> اسحب الشخص مباشرة بالماوس، أو اضبط المحاذاة:
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "6px" }}>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("center")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="توسيط المحتوى في منتصف الكانفاس">
+                              🎯 توسيط
+                            </button>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("right")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليمين">
+                              ➡️ يمين
+                            </button>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("left")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليسار">
+                              ⬅️ يسار
+                            </button>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("top")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأعلى">
+                              ⬆️ أعلى
+                            </button>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("bottom")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأسفل">
+                              ⬇️ أسفل
+                            </button>
+                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("reset")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="إعادة ضبط موضع المحتوى">
+                              🔄 ضبط
+                            </button>
+                          </div>
+                          <div style={{ marginBottom: "6px" }}>
+                            <button
+                              type="button"
+                              className="retouch-action-submit-btn"
+                              onClick={handleFitCanvasToSubject}
+                              style={{
+                                width: "100%",
+                                justifyContent: "center",
+                                fontSize: "9.5px",
+                                padding: "6px 8px",
+                                background: "rgba(234,179,8,0.15)",
+                                border: "1px solid rgba(234,179,8,0.45)",
+                                color: "#fef08a",
+                                fontWeight: 700
+                              }}
+                              title="اقتصاص مساحة العمل بالكامل لتطابق أبعاد المحتوى الصافي تماماً وحذف أي مساحة فارغة خارجية"
+                            >
+                              ✂️ اقتصاص مساحة العمل للمحتوى الصافي
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="retouch-action-submit-btn"
+                            onClick={handleExportPureSubject}
+                            style={{
+                              width: "100%",
+                              justifyContent: "center",
+                              background: "linear-gradient(135deg, rgba(45,212,191,0.25), rgba(20,184,166,0.2))",
+                              border: "1px solid rgba(45,212,191,0.6)",
+                              color: "#ccfbf1",
+                              fontWeight: 700,
+                              fontSize: "10px",
+                              padding: "7px 10px",
+                              gap: "5px"
+                            }}
+                            title="تصدير الشخص المعزول وحده بصيغة PNG شفافة عالية الدقة بدون أي خلفية أو مساحة عمل زائدة"
+                          >
+                            <Download size={13} /> 📥 تصدير المحتوى الصافي فقط (PNG شفاف)
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ─── 1. الميزة الأولى المطلوبة: زر عزل المحتوى الصافي فقط بدون أي خلفية أو طبقات ─── */}
+                      <div style={{ marginBottom: "8px", background: "rgba(234,179,8,0.07)", border: "1px solid rgba(245,158,11,0.45)", borderRadius: "8px", padding: "8px 10px" }}>
+                        <div style={{ fontSize: "10px", color: "#fef08a", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px" }}>
+                          <span>🎯</span> <span>عزل المحتوى الصافي (بدون خلفية أو طبقات):</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="retouch-action-submit-btn"
+                          onClick={handlePureContentCutout}
+                          disabled={aiProcessing}
+                          style={{
+                            width: "100%",
+                            justifyContent: "center",
+                            background: "linear-gradient(135deg, rgba(234,179,8,0.3), rgba(245,158,11,0.25))",
+                            border: "1px solid rgba(245,158,11,0.7)",
+                            fontWeight: 700,
+                            color: "#fef08a",
+                            padding: "9px 12px",
+                            fontSize: "11px",
+                            boxShadow: "0 2px 10px rgba(234,179,8,0.18)",
+                            opacity: aiProcessing ? 0.6 : 1,
+                            cursor: aiProcessing ? "wait" : "pointer",
+                            gap: "6px"
+                          }}
+                          title="عزل المحتوى الصافي فقط وقص أبعاد الصورة بدقة متناهية على حدوده بالضبط بدون أي خلفية أو أي طبقات إضافية"
+                        >
+                          <Crop size={15} /> 🎯 عزل المحتوى الصافي فقط (بدون أي خلفية)
+                        </button>
+                        <div style={{ fontSize: "8.5px", color: "#eab308", marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
+                          ✨ يستخرج العنصر ويقص الصورة على حدوده تماماً بدون أي طبقة شفافة أو مساحة فارغة
+                        </div>
+                      </div>
+
+                      {/* ─── 2. الميزة الثانية المطلوبة: زر رفع صورة خلفية مخصصة للصورة المعزولة ─── */}
+                      <div style={{ marginBottom: "10px", background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.45)", borderRadius: "8px", padding: "8px 10px" }}>
+                        <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px" }}>
+                          <span>🖼️</span> <span>تركيب خلفية مخصصة للصورة المعزولة:</span>
+                        </div>
+                        <input
+                          ref={customBgInputRef}
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={handleUploadCustomBackground}
+                        />
+                        <button
+                          type="button"
+                          className="retouch-action-submit-btn"
+                          onClick={() => customBgInputRef.current?.click()}
+                          disabled={aiProcessing}
+                          style={{
+                            width: "100%",
+                            justifyContent: "center",
+                            background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.25))",
+                            border: "1px solid rgba(59,130,246,0.7)",
+                            color: "#bfdbfe",
+                            fontWeight: 700,
+                            fontSize: "11px",
+                            padding: "9px 12px",
+                            gap: "6px",
+                            boxShadow: "0 2px 10px rgba(59,130,246,0.18)",
+                            opacity: aiProcessing ? 0.6 : 1,
+                            cursor: aiProcessing ? "wait" : "pointer"
+                          }}
+                          title="رفع أي صورة من جهازك لوضعها كخلفية جديدة بدقة متناهية خلف الصورة التي تم عزل خلفيتها"
+                        >
+                          <Upload size={15} /> 🖼️ رفع صورة خلفية مخصصة من جهازك...
+                        </button>
+                        <div style={{ fontSize: "8.5px", color: "#60a5fa", marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
+                          📁 اختر أي صورة من جهازك لدمجها تلقائياً كخلفية جديدة عالية الدقة خلف العنصر المعزول
+                        </div>
+                      </div>
+
+                      {/* 3. تحرير الجسم إلى طبقة جديدة */}
+                      <div style={{ marginBottom: "6px" }}>
                         <button
                           type="button"
                           className="retouch-action-submit-btn"
@@ -4011,22 +5351,21 @@ export default function Home() {
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(45,212,191,0.25), rgba(6,182,212,0.2))",
-                            border: "1px solid rgba(45,212,191,0.5)",
-                            fontWeight: 700,
+                            background: "linear-gradient(135deg, rgba(45,212,191,0.2), rgba(6,182,212,0.15))",
+                            border: "1px solid rgba(45,212,191,0.4)",
+                            fontWeight: 600,
                             color: "#5eead4",
-                            padding: "8px 10px",
-                            boxShadow: "0 2px 8px rgba(45,212,191,0.12)",
+                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
                           title="تحرير وفصل الجسم بالذكاء الاصطناعي ونقله إلى طبقة مستقلة في لوحة الطبقات"
                         >
-                          <Sparkles size={14} /> ✨ تحرير الجسم إلى طبقة جديدة (Extract Subject)
+                          <Sparkles size={13} /> ✨ تحرير الجسم إلى طبقة جديدة (Extract Subject)
                         </button>
                       </div>
 
-                      {/* 1. إزالة الخلفية وعزل الجسم مباشرة */}
+                      {/* 4. إزالة الخلفية وعزل الجسم مباشرة */}
                       <div style={{ marginBottom: "6px" }}>
                         <button
                           type="button"
@@ -4036,9 +5375,10 @@ export default function Home() {
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "rgba(45,212,191,0.12)",
-                            border: "1px solid rgba(45,212,191,0.35)",
+                            background: "rgba(45,212,191,0.1)",
+                            border: "1px solid rgba(45,212,191,0.3)",
                             fontWeight: 600,
+                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
@@ -4048,7 +5388,7 @@ export default function Home() {
                         </button>
                       </div>
 
-                      {/* 2. تمويه البورتريه بتدرج */}
+                      {/* 5. تمويه البورتريه بتدرج */}
                       <div style={{ marginBottom: "8px" }}>
                         <button
                           type="button"
@@ -4062,6 +5402,7 @@ export default function Home() {
                             border: "1px solid rgba(99,102,241,0.45)",
                             color: "#c7d2fe",
                             fontWeight: 600,
+                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
@@ -4071,9 +5412,9 @@ export default function Home() {
                         </button>
                       </div>
 
-                      {/* 3. استبدال الخلفية بألوان وتدرجات استوديو */}
+                      {/* 6. استبدال الخلفية بألوان وتدرجات استوديو */}
                       <div>
-                        <div style={{ fontSize: "10px", color: "#a8c4be", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم المفرغ بالذكاء الاصطناعي:</div>
+                        <div style={{ fontSize: "10px", color: "#a8c4be", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم بألوان وتدرجات جاهزة:</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "4px" }}>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("transparent")}
@@ -4649,6 +5990,9 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Help: دليل المستخدم */}
+        {helpOpen && <UserGuide onClose={() => setHelpOpen(false)} />}
 
         {/* 2. Modal: معلومات الملف والمشروع */}
         {fileInfoOpen && (

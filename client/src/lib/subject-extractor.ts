@@ -438,6 +438,158 @@ export function extractSubjectAlgorithmic(
   };
 }
 
+interface ComponentMetadata {
+  label: number;
+  size: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  sumAlpha: number;
+}
+
+/**
+ * Clean isolated noise specks, background props, disconnected furniture remnants,
+ * and semi-transparent alpha haze using spatial connected component intelligence.
+ */
+export function cleanMaskNoise(data: Uint8ClampedArray, W: number, H: number): void {
+  // Step 1: Alpha cutoff - remove faint semi-transparent floating haze and background shadow bleed
+  for (let i = 0; i < W * H; i++) {
+    if (data[i * 4 + 3] < 45) {
+      data[i * 4 + 3] = 0;
+    }
+  }
+
+  // Step 2: Connected component analysis with spatial bounding boxes and alpha accumulation
+  const labels = new Int32Array(W * H);
+  let currentLabel = 0;
+  const components: ComponentMetadata[] = [
+    { label: 0, size: 0, minX: W, maxX: 0, minY: H, maxY: 0, sumAlpha: 0 }
+  ];
+  const queue: number[] = [];
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      if (data[idx * 4 + 3] > 0 && labels[idx] === 0) {
+        currentLabel++;
+        let size = 0;
+        let cMinX = x, cMaxX = x, cMinY = y, cMaxY = y;
+        let cSumAlpha = 0;
+
+        queue.push(idx);
+        labels[idx] = currentLabel;
+
+        while (queue.length > 0) {
+          const curr = queue.pop()!;
+          size++;
+          const cx = curr % W;
+          const cy = (curr / W) | 0;
+
+          if (cx < cMinX) cMinX = cx;
+          if (cx > cMaxX) cMaxX = cx;
+          if (cy < cMinY) cMinY = cy;
+          if (cy > cMaxY) cMaxY = cy;
+          cSumAlpha += data[curr * 4 + 3];
+
+          // 4-neighborhood
+          if (cx > 0) {
+            const n = curr - 1;
+            if (data[n * 4 + 3] > 0 && labels[n] === 0) { labels[n] = currentLabel; queue.push(n); }
+          }
+          if (cx < W - 1) {
+            const n = curr + 1;
+            if (data[n * 4 + 3] > 0 && labels[n] === 0) { labels[n] = currentLabel; queue.push(n); }
+          }
+          if (cy > 0) {
+            const n = curr - W;
+            if (data[n * 4 + 3] > 0 && labels[n] === 0) { labels[n] = currentLabel; queue.push(n); }
+          }
+          if (cy < H - 1) {
+            const n = curr + W;
+            if (data[n * 4 + 3] > 0 && labels[n] === 0) { labels[n] = currentLabel; queue.push(n); }
+          }
+        }
+
+        components.push({
+          label: currentLabel,
+          size,
+          minX: cMinX,
+          maxX: cMaxX,
+          minY: cMinY,
+          maxY: cMaxY,
+          sumAlpha: cSumAlpha
+        });
+      }
+    }
+  }
+
+  if (currentLabel === 0) return;
+
+  // Step 3: Find dominant primary subject component
+  let maxLabel = 1;
+  let maxSize = components[1].size;
+  for (let i = 2; i <= currentLabel; i++) {
+    if (components[i].size > maxSize) {
+      maxSize = components[i].size;
+      maxLabel = i;
+    }
+  }
+
+  const primary = components[maxLabel];
+  const keepLabels = new Set<number>([maxLabel]);
+
+  // Step 4: Intelligent spatial filtering: keep only genuine parts of the main subject
+  // Discard isolated props, chair armrests, side objects, distant artifacts, and low-density noise
+  for (let i = 1; i <= currentLabel; i++) {
+    if (i === maxLabel) continue;
+    const comp = components[i];
+    const avgAlpha = comp.sumAlpha / comp.size;
+
+    // Discard any component with weak average alpha (shadows / translucent reflections)
+    if (avgAlpha < 70) continue;
+
+    // Calculate horizontal and vertical gap to primary subject
+    const gapX = Math.max(0, comp.minX - primary.maxX, primary.minX - comp.maxX);
+    const gapY = Math.max(0, comp.minY - primary.maxY, primary.minY - comp.maxY);
+
+    // If there is an empty horizontal gap between the component and the main subject body:
+    // Typical for chairs, side furniture, wall frames, etc.
+    if (gapX > 15) {
+      // Only keep if it is a major separate entity (e.g. a second full person with size >= 40% of primary)
+      if (comp.size >= maxSize * 0.40 && avgAlpha > 120) {
+        keepLabels.add(i);
+      }
+      continue; // Purge side artifacts like chair armrests!
+    }
+
+    // If there is a vertical gap > 20px (detached ceiling lights, floor debris)
+    if (gapY > 20) {
+      if (comp.size >= maxSize * 0.40 && avgAlpha > 120) {
+        keepLabels.add(i);
+      }
+      continue;
+    }
+
+    // For components close to or overlapping with primary subject:
+    // Discard tiny specks and dust smaller than 2% of primary subject unless directly touching
+    if (comp.size < Math.max(80, Math.round(maxSize * 0.02))) {
+      const dist = Math.sqrt(gapX * gapX + gapY * gapY);
+      if (dist > 8) continue;
+    }
+
+    keepLabels.add(i);
+  }
+
+  // Step 5: Zero out rejected labels
+  for (let i = 0; i < W * H; i++) {
+    const lbl = labels[i];
+    if (lbl > 0 && !keepLabels.has(lbl)) {
+      data[i * 4 + 3] = 0;
+    }
+  }
+}
+
 /**
  * AI Deep Learning Engine (IS-Net Neural Segmentation):
  * Executes via server-backed ONNX native neural engine.
@@ -519,13 +671,18 @@ export async function extractSubjectWithAI(
       const imgData = offCtx.getImageData(0, 0, W, H);
       const data = imgData.data;
 
+      // Clean floating noise islands & alpha dust
+      cleanMaskNoise(data, W, H);
+      offCtx.putImageData(imgData, 0, 0);
+      const cleanedDataUrl = offscreen.toDataURL("image/png");
+
       let minX = W, minY = H, maxX = 0, maxY = 0;
       let fgCount = 0, bgCount = 0;
 
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const alpha = data[(y * W + x) * 4 + 3];
-          if (alpha > 20) {
+          if (alpha >= 35) {
             fgCount++;
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
@@ -542,7 +699,7 @@ export async function extractSubjectWithAI(
       }
 
       resolve({
-        dataUrl: resultDataUrl,
+        dataUrl: cleanedDataUrl,
         width: W,
         height: H,
         subjectBounds: { minX, minY, maxX, maxY },
@@ -587,14 +744,15 @@ export async function extractSubjectFromCanvas(
 
 /**
  * True Portrait Mode (Bokeh Blur):
- * 1. Background image is heavily blurred with subtle radial vignette.
- * 2. Extracted subject is drawn 100% SHARP on top using alpha mask!
+ * 1. Background image is softly and beautifully blurred with an overscan margin to prevent border bleed.
+ * 2. Background luminosity and colors remain 100% natural, crisp, and vibrant (zero dark vignette distortion).
+ * 3. Extracted subject is drawn 100% SHARP on top using alpha mask!
  */
 export function createPortraitBokeh(
   originalCanvas: HTMLCanvasElement,
   subjectCanvasOrDataUrl: HTMLCanvasElement | string,
   blurRadius: number = 20,
-  bokehDepth: number = 0.5
+  bokehDepth: number = 0
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const W = originalCanvas.width;
@@ -606,16 +764,18 @@ export function createPortraitBokeh(
     const ctx = out.getContext("2d");
     if (!ctx) return reject(new Error("No 2d context"));
 
-    // Step 1: Draw heavily blurred background
-    ctx.filter = `blur(${Math.max(5, blurRadius)}px)`;
-    ctx.drawImage(originalCanvas, 0, 0, W, H);
+    // Step 1: Draw heavily blurred background with bleed margin to prevent edge fade/distortion
+    const effectiveBlur = Math.max(4, Math.round(blurRadius));
+    const bleed = Math.ceil(effectiveBlur * 2.5);
+    ctx.filter = `blur(${effectiveBlur}px)`;
+    ctx.drawImage(originalCanvas, -bleed, -bleed, W + bleed * 2, H + bleed * 2);
     ctx.filter = "none";
 
-    // Step 2: Radial bokeh depth vignette (subtle luxury lighting)
-    if (bokehDepth > 0) {
-      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
+    // Step 2: Only apply subtle luxury vignette if explicitly requested with positive bokehDepth
+    if (bokehDepth > 0.5) {
+      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.8);
       grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(1, `rgba(0,0,0,${Math.min(0.6, bokehDepth * 0.5)})`);
+      grad.addColorStop(1, `rgba(0,0,0,${Math.min(0.25, (bokehDepth - 0.5) * 0.3)})`);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
     }
