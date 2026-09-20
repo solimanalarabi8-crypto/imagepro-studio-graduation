@@ -135,6 +135,7 @@ export interface FloatingSubject {
   height: number;
   naturalWidth: number;
   naturalHeight: number;
+  rotation?: number;
 }
 type EditorSnapshot = {
   imageSrc: string;
@@ -558,6 +559,18 @@ export default function Home() {
   const dragRafIdRef = useRef<number | null>(null);
   const baseOffscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const cachedSubjectImgRef = useRef<HTMLImageElement | null>(null);
+  // Section 13: 8-Handle Free Transform Drag State
+  const [activeTransformHandle, setActiveTransformHandle] = useState<string | null>(null);
+  const transformStartRef = useRef<{
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    initialWidth: number;
+    initialHeight: number;
+    initialRotation: number;
+    aspectRatio: number;
+  } | null>(null);
 
   // Phase 13: AI & Advanced Features State
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -919,7 +932,16 @@ export default function Home() {
             context.globalAlpha = opacityToAlpha(targetLyr.opacity);
             context.globalCompositeOperation = blendModeToCompositeOp(targetLyr.blendMode || "normal");
           }
-          context.drawImage(subImg, posX, posY, floatingSubject.width, floatingSubject.height);
+          const rot = floatingSubject.rotation || 0;
+          if (rot !== 0) {
+            const cx = posX + floatingSubject.width / 2;
+            const cy = posY + floatingSubject.height / 2;
+            context.translate(cx, cy);
+            context.rotate((rot * Math.PI) / 180);
+            context.drawImage(subImg, -floatingSubject.width / 2, -floatingSubject.height / 2, floatingSubject.width, floatingSubject.height);
+          } else {
+            context.drawImage(subImg, posX, posY, floatingSubject.width, floatingSubject.height);
+          }
           context.restore();
         }
       };
@@ -1011,7 +1033,18 @@ export default function Home() {
       context.drawImage(baseOffscreenCanvasRef.current, 0, 0);
     }
 
-    context.drawImage(subImg, curX, curY, floatingSubject.width, floatingSubject.height);
+    const rot = floatingSubject.rotation || 0;
+    if (rot !== 0) {
+      context.save();
+      const cx = curX + floatingSubject.width / 2;
+      const cy = curY + floatingSubject.height / 2;
+      context.translate(cx, cy);
+      context.rotate((rot * Math.PI) / 180);
+      context.drawImage(subImg, -floatingSubject.width / 2, -floatingSubject.height / 2, floatingSubject.width, floatingSubject.height);
+      context.restore();
+    } else {
+      context.drawImage(subImg, curX, curY, floatingSubject.width, floatingSubject.height);
+    }
   };
 
   // Clear any old stale project from localStorage on startup so every session opens a fresh clean project
@@ -2215,6 +2248,198 @@ export default function Home() {
     cachedImageSrcRef.current = null;
     baseOffscreenCanvasRef.current = null;
     setStatus(`✂️ تم اقتصاص مساحة العمل بالكامل لتطابق المحتوى الصافي بدقة متناهية (${floatingSubject.width}×${floatingSubject.height} بكسل) — تم إزالة أي مساحة إضافية تماماً!`);
+  };
+
+  /**
+   * Section 13: Free Transform Controls & Pointer Event Handlers
+   */
+  const handleRotateSubject = (deltaOrAngle: number, isAbsolute: boolean = false) => {
+    if (!floatingSubject) return;
+    setFloatingSubject((prev) => {
+      if (!prev) return null;
+      let newRot = isAbsolute ? deltaOrAngle : (prev.rotation || 0) + deltaOrAngle;
+      newRot = Math.round(((newRot % 360) + 360) % 360);
+      return { ...prev, rotation: newRot };
+    });
+    setStatus(`↻ تم تدوير العنصر إلى: ${deltaOrAngle}°`);
+  };
+
+  const handleTransformPointerDown = (
+    e: React.PointerEvent,
+    handleType: "nw" | "ne" | "se" | "sw" | "n" | "s" | "e" | "w" | "rot" | "move"
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!floatingSubject) return;
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setActiveTransformHandle(handleType);
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const canvasPointerX = (e.clientX - bounds.left) * (canvas.width / bounds.width);
+    const canvasPointerY = (e.clientY - bounds.top) * (canvas.height / bounds.height);
+
+    const curX = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.x : floatingSubject.x;
+    const curY = floatingSubjectPosRef.current ? floatingSubjectPosRef.current.y : floatingSubject.y;
+
+    transformStartRef.current = {
+      startX: canvasPointerX,
+      startY: canvasPointerY,
+      initialX: curX,
+      initialY: curY,
+      initialWidth: floatingSubject.width,
+      initialHeight: floatingSubject.height,
+      initialRotation: floatingSubject.rotation || 0,
+      aspectRatio: floatingSubject.width / Math.max(1, floatingSubject.height),
+    };
+  };
+
+  const handleTransformPointerMove = (e: React.PointerEvent) => {
+    if (!activeTransformHandle || !transformStartRef.current || !floatingSubject) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const bounds = canvas.getBoundingClientRect();
+    const canvasPointerX = (e.clientX - bounds.left) * (canvas.width / bounds.width);
+    const canvasPointerY = (e.clientY - bounds.top) * (canvas.height / bounds.height);
+
+    const { startX, startY, initialX, initialY, initialWidth, initialHeight, initialRotation, aspectRatio } = transformStartRef.current;
+    const dx = canvasPointerX - startX;
+    const dy = canvasPointerY - startY;
+
+    if (activeTransformHandle === "move") {
+      const nx = Math.round(initialX + dx);
+      const ny = Math.round(initialY + dy);
+      floatingSubjectPosRef.current = { x: nx, y: ny };
+      setFloatingSubject((prev) => (prev ? { ...prev, x: nx, y: ny } : null));
+      if (!dragRafIdRef.current) {
+        dragRafIdRef.current = requestAnimationFrame(() => {
+          dragRafIdRef.current = null;
+          fastRenderFloatingSubject();
+        });
+      }
+      return;
+    }
+
+    if (activeTransformHandle === "rot") {
+      const centerX = initialX + initialWidth / 2;
+      const centerY = initialY + initialHeight / 2;
+      const startAngle = Math.atan2(startY - centerY, startX - centerX) * (180 / Math.PI);
+      const curAngle = Math.atan2(canvasPointerY - centerY, canvasPointerX - centerX) * (180 / Math.PI);
+      let newRot = Math.round((initialRotation + (curAngle - startAngle)) % 360);
+      if (newRot < 0) newRot += 360;
+
+      for (const snap of [0, 45, 90, 135, 180, 225, 270, 315, 360]) {
+        if (Math.abs(newRot - snap) <= 4) {
+          newRot = snap === 360 ? 0 : snap;
+          break;
+        }
+      }
+
+      setFloatingSubject((prev) => (prev ? { ...prev, rotation: newRot } : null));
+      if (!dragRafIdRef.current) {
+        dragRafIdRef.current = requestAnimationFrame(() => {
+          dragRafIdRef.current = null;
+          fastRenderFloatingSubject();
+        });
+      }
+      return;
+    }
+
+    let newW = initialWidth;
+    let newH = initialHeight;
+    let newX = initialX;
+    let newY = initialY;
+
+    if (activeTransformHandle === "se") {
+      newW = Math.max(20, Math.round(initialWidth + dx));
+      newH = e.shiftKey ? Math.round(newW / aspectRatio) : Math.max(20, Math.round(initialHeight + dy));
+    } else if (activeTransformHandle === "sw") {
+      newW = Math.max(20, Math.round(initialWidth - dx));
+      newH = e.shiftKey ? Math.round(newW / aspectRatio) : Math.max(20, Math.round(initialHeight + dy));
+      newX = Math.round(initialX + (initialWidth - newW));
+    } else if (activeTransformHandle === "ne") {
+      newW = Math.max(20, Math.round(initialWidth + dx));
+      newH = e.shiftKey ? Math.round(newW / aspectRatio) : Math.max(20, Math.round(initialHeight - dy));
+      newY = Math.round(initialY + (initialHeight - newH));
+    } else if (activeTransformHandle === "nw") {
+      newW = Math.max(20, Math.round(initialWidth - dx));
+      newH = e.shiftKey ? Math.round(newW / aspectRatio) : Math.max(20, Math.round(initialHeight - dy));
+      newX = Math.round(initialX + (initialWidth - newW));
+      newY = Math.round(initialY + (initialHeight - newH));
+    } else if (activeTransformHandle === "e") {
+      newW = Math.max(20, Math.round(initialWidth + dx));
+    } else if (activeTransformHandle === "w") {
+      newW = Math.max(20, Math.round(initialWidth - dx));
+      newX = Math.round(initialX + (initialWidth - newW));
+    } else if (activeTransformHandle === "s") {
+      newH = Math.max(20, Math.round(initialHeight + dy));
+    } else if (activeTransformHandle === "n") {
+      newH = Math.max(20, Math.round(initialHeight - dy));
+      newY = Math.round(initialY + (initialHeight - newH));
+    }
+
+    floatingSubjectPosRef.current = { x: newX, y: newY };
+    setFloatingSubject((prev) =>
+      prev
+        ? {
+            ...prev,
+            x: newX,
+            y: newY,
+            width: newW,
+            height: newH,
+          }
+        : null
+    );
+
+    if (!dragRafIdRef.current) {
+      dragRafIdRef.current = requestAnimationFrame(() => {
+        dragRafIdRef.current = null;
+        fastRenderFloatingSubject();
+      });
+    }
+  };
+
+  const handleTransformPointerUp = (e: React.PointerEvent) => {
+    if (activeTransformHandle) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      setActiveTransformHandle(null);
+      transformStartRef.current = null;
+      if (floatingSubject) {
+        setStatus(`📐 تم ضبط تحويل العنصر (${Math.round(floatingSubject.width)}×${Math.round(floatingSubject.height)} بكسل، تدوير ${Math.round(floatingSubject.rotation || 0)}°)`);
+      }
+    }
+  };
+
+  const handleEnableFreeTransformOnLayer = (layerId: string) => {
+    const target = layers.find((l) => l.id === layerId);
+    if (!target) return;
+    if (floatingSubject) {
+      setActiveTool("select");
+      setStatus("أداة التحويل الحر نشطة على العنصر الحالي 📐");
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    setFloatingSubject({
+      id: `layer-transform-${Date.now()}`,
+      dataUrl,
+      x: 0,
+      y: 0,
+      width: canvas.width,
+      height: canvas.height,
+      naturalWidth: canvas.width,
+      naturalHeight: canvas.height,
+      rotation: 0,
+    });
+    floatingSubjectPosRef.current = { x: 0, y: 0 };
+    setActiveTool("select");
+    setStatus(`📐 تم تفعيل التحويل الحر (8 مقاود + تدوير) للطبقة: ${target.name}`);
   };
 
   /**
@@ -4087,19 +4312,7 @@ export default function Home() {
             {/* Quick Action Studio Pills */}
             <button
               onClick={() => setIsTemplatesModalOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "5px 10px",
-                background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(59,130,246,0.18))",
-                border: "1px solid rgba(6,182,212,0.4)",
-                borderRadius: "6px",
-                color: "#38bdf8",
-                fontSize: "11.5px",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
+              className="studio-pill studio-pill-new"
               title={currentLang === "ar" ? "مشروع جديد واختيار قوالب جاهزة" : "New Project & Templates"}
             >
               ✨ {currentLang === "ar" ? "مشروع جديد" : "New Project"}
@@ -4107,19 +4320,7 @@ export default function Home() {
 
             <button
               onClick={() => setIsBlendModalOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "5px 10px",
-                background: "linear-gradient(135deg, rgba(168,85,247,0.18), rgba(236,72,153,0.18))",
-                border: "1px solid rgba(168,85,247,0.4)",
-                borderRadius: "6px",
-                color: "#c084fc",
-                fontSize: "11.5px",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
+              className="studio-pill studio-pill-blend"
               title={currentLang === "ar" ? "استوديو دمج صورتين باحترافية" : "Two-Image Blend Studio"}
             >
               🖼️ {currentLang === "ar" ? "دمج صورتين" : "Blend Images"}
@@ -4127,19 +4328,7 @@ export default function Home() {
 
             <button
               onClick={() => setIsProductBgModalOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "5px 10px",
-                background: "linear-gradient(135deg, rgba(245,158,11,0.18), rgba(234,88,12,0.18))",
-                border: "1px solid rgba(245,158,11,0.4)",
-                borderRadius: "6px",
-                color: "#fbbf24",
-                fontSize: "11.5px",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
+              className="studio-pill studio-pill-bg"
               title={currentLang === "ar" ? "مكتبة خلفيات المنتجات واستوديو التصوير" : "Product Showcase Backgrounds"}
             >
               🎨 {currentLang === "ar" ? "خلفيات الاستوديو" : "Studio BG"}
@@ -4152,16 +4341,7 @@ export default function Home() {
                 setCurrentLang(nextLang);
                 setStatus(nextLang === "ar" ? "تم تحويل اللغة إلى العربية" : "Switched to English");
               }}
-              style={{
-                padding: "5px 9px",
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: "6px",
-                color: "#94a3b8",
-                fontSize: "11px",
-                fontWeight: 700,
-                cursor: "pointer"
-              }}
+              className="studio-pill studio-pill-neutral"
               title={currentLang === "ar" ? "Switch to English" : "التحويل للعربية"}
             >
               🌐 {currentLang === "ar" ? "EN" : "عربي"}
@@ -4174,15 +4354,7 @@ export default function Home() {
                 setCurrentTheme(nextTheme);
                 document.documentElement.classList.toggle("light-theme", nextTheme === "light");
               }}
-              style={{
-                padding: "5px 8px",
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: "6px",
-                color: currentTheme === "dark" ? "#fbbf24" : "#0f172a",
-                fontSize: "12px",
-                cursor: "pointer"
-              }}
+              className="studio-pill studio-pill-neutral"
               title={currentTheme === "dark" ? "التحويل للوضع النهاري" : "Switch to Dark Mode"}
             >
               {currentTheme === "dark" ? "☀️" : "🌙"}
@@ -4228,21 +4400,7 @@ export default function Home() {
             <button
               onClick={() => setHelpOpen(true)}
               title="دليل المستخدم — مساعدة"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "5px 11px",
-                background: "rgba(45,212,191,0.1)",
-                border: "1px solid rgba(45,212,191,0.25)",
-                borderRadius: "6px",
-                color: "#2dd4bf",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                transition: "all 0.15s",
-              }}
+              className="studio-pill studio-pill-help"
             >
               📖 مساعدة
             </button>
@@ -4251,25 +4409,9 @@ export default function Home() {
         </header>
 
         {/* Contextual Tool Options Bar (Photoshop / Figma Style) */}
-        <div
-          className="tool-options-bar"
-          style={{
-            height: "40px",
-            background: currentTheme === "dark" ? "#121b1b" : "#f8fafc",
-            borderBottom: currentTheme === "dark" ? "1px solid rgba(45,212,191,0.2)" : "1px solid #cbd5e1",
-            display: "flex",
-            alignItems: "center",
-            padding: "0 16px",
-            gap: "14px",
-            fontSize: "12px",
-            color: currentTheme === "dark" ? "#e2e8f0" : "#0f172a",
-            zIndex: 30,
-            overflowX: "auto",
-            whiteSpace: "nowrap"
-          }}
-        >
+        <div className="tool-options-bar">
           {/* Tool Identifier */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#2dd4bf" }}>
+          <div className="tool-id-badge">
             <span style={{ fontSize: "14px" }}>
               {activeTool === "eraser" ? "🧹" : activeTool === "brush" ? "🖌️" : activeTool === "crop" ? "✂️" : activeTool === "select" ? "↖️" : activeTool === "shape" ? "🔷" : activeTool === "text" ? "✍️" : activeTool === "clone" ? "🩹" : "⚙️"}
             </span>
@@ -4278,59 +4420,32 @@ export default function Home() {
             </span>
           </div>
 
-          <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.15)" }} />
+          <div className="tool-bar-separator" />
 
           {/* Options for ERASER */}
           {activeTool === "eraser" && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الوضع:" : "Mode:"}</span>
-                <div style={{ display: "flex", background: "rgba(0,0,0,0.25)", padding: "2px", borderRadius: "6px", gap: "2px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span className="tool-opt-label">{currentLang === "ar" ? "الوضع:" : "Mode:"}</span>
+                <div className="tool-mode-group">
                   <button
                     type="button"
                     onClick={() => setEraserMode("pixels")}
-                    style={{
-                      padding: "3px 8px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: eraserMode === "pixels" ? 700 : 400,
-                      background: eraserMode === "pixels" ? "#f43f5e" : "transparent",
-                      color: "#fff",
-                      border: "none",
-                      cursor: "pointer"
-                    }}
+                    className={`tool-mode-btn ${eraserMode === "pixels" ? "active" : ""}`}
                   >
                     {currentLang === "ar" ? "بكسلات الصورة (Alpha 0)" : "Image Pixels"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setEraserMode("paint")}
-                    style={{
-                      padding: "3px 8px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: eraserMode === "paint" ? 700 : 400,
-                      background: eraserMode === "paint" ? "#f43f5e" : "transparent",
-                      color: "#fff",
-                      border: "none",
-                      cursor: "pointer"
-                    }}
+                    className={`tool-mode-btn ${eraserMode === "paint" ? "active" : ""}`}
                   >
                     {currentLang === "ar" ? "طبقة الرسم" : "Paint Strokes"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setEraserMode("magic")}
-                    style={{
-                      padding: "3px 8px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: eraserMode === "magic" ? 700 : 400,
-                      background: eraserMode === "magic" ? "#8b5cf6" : "transparent",
-                      color: "#fff",
-                      border: "none",
-                      cursor: "pointer"
-                    }}
+                    className={`tool-mode-btn ${eraserMode === "magic" ? "active" : ""}`}
                   >
                     {currentLang === "ar" ? "✨ محو ذكي بالألوان" : "Magic Flood"}
                   </button>
@@ -4340,7 +4455,7 @@ export default function Home() {
               {eraserMode !== "magic" ? (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
                     <input
                       type="range"
                       min={2}
@@ -4349,11 +4464,11 @@ export default function Home() {
                       onChange={(e) => setBrushSize(Number(e.target.value))}
                       style={{ width: "80px", accentColor: "#f43f5e" }}
                     />
-                    <span style={{ fontSize: "11px", minWidth: "32px", fontFamily: "monospace" }}>{brushSize}px</span>
+                    <span className="tool-opt-value">{brushSize}px</span>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الصلابة:" : "Hardness:"}</span>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "الصلابة:" : "Hardness:"}</span>
                     <input
                       type="range"
                       min={10}
@@ -4362,13 +4477,13 @@ export default function Home() {
                       onChange={(e) => setBrushHardness(Number(e.target.value))}
                       style={{ width: "70px", accentColor: "#f43f5e" }}
                     />
-                    <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{brushHardness}%</span>
+                    <span className="tool-opt-value">{brushHardness}%</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "حساسية التسامح:" : "Tolerance:"}</span>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "حساسية التسامح:" : "Tolerance:"}</span>
                     <input
                       type="range"
                       min={5}
@@ -4377,7 +4492,7 @@ export default function Home() {
                       onChange={(e) => setMagicEraserTolerance(Number(e.target.value))}
                       style={{ width: "80px", accentColor: "#8b5cf6" }}
                     />
-                    <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{magicEraserTolerance}</span>
+                    <span className="tool-opt-value">{magicEraserTolerance}</span>
                   </div>
                   <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", cursor: "pointer" }}>
                     <input
@@ -4386,7 +4501,7 @@ export default function Home() {
                       onChange={(e) => setMagicEraserContiguous(e.target.checked)}
                       style={{ accentColor: "#8b5cf6" }}
                     />
-                    <span>{currentLang === "ar" ? "بكسلات متصلة فقط" : "Contiguous Only"}</span>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "بكسلات متصلة فقط" : "Contiguous Only"}</span>
                   </label>
                 </>
               )}
@@ -4397,7 +4512,7 @@ export default function Home() {
           {(activeTool === "brush" || activeTool === "pencil") && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
+                <span className="tool-opt-label">{currentLang === "ar" ? "الحجم:" : "Size:"}</span>
                 <input
                   type="range"
                   min={1}
@@ -4406,10 +4521,10 @@ export default function Home() {
                   onChange={(e) => setBrushSize(Number(e.target.value))}
                   style={{ width: "80px", accentColor: "#2dd4bf" }}
                 />
-                <span style={{ fontSize: "11px", minWidth: "32px", fontFamily: "monospace" }}>{brushSize}px</span>
+                <span className="tool-opt-value">{brushSize}px</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "الشفافية:" : "Opacity:"}</span>
+                <span className="tool-opt-label">{currentLang === "ar" ? "الشفافية:" : "Opacity:"}</span>
                 <input
                   type="range"
                   min={10}
@@ -4418,10 +4533,10 @@ export default function Home() {
                   onChange={(e) => setBrushOpacity(Number(e.target.value))}
                   style={{ width: "70px", accentColor: "#2dd4bf" }}
                 />
-                <span style={{ fontSize: "11px", minWidth: "28px", fontFamily: "monospace" }}>{brushOpacity}%</span>
+                <span className="tool-opt-value">{brushOpacity}%</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "اللون:" : "Color:"}</span>
+                <span className="tool-opt-label">{currentLang === "ar" ? "اللون:" : "Color:"}</span>
                 <input
                   type="color"
                   value={foregroundColor}
@@ -4438,10 +4553,150 @@ export default function Home() {
               <button
                 type="button"
                 onClick={cropToSelection}
-                style={{ padding: "4px 12px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, background: "#10b981", color: "#fff", border: "none", cursor: "pointer" }}
+                style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}
               >
                 ✓ {currentLang === "ar" ? "تطبيق القص للمنطقة المحددة" : "Apply Crop"}
               </button>
+            </div>
+          )}
+
+          {/* Options for SELECT / FREE TRANSFORM */}
+          {activeTool === "select" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {floatingSubject ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="tool-opt-label">📐 {currentLang === "ar" ? "الأبعاد:" : "Size:"}</span>
+                    <span className="tool-opt-value">{Math.round(floatingSubject.width)} × {Math.round(floatingSubject.height)} px</span>
+                  </div>
+
+                  <div className="tool-bar-separator" />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="tool-opt-label">↻ {currentLang === "ar" ? "التدوير:" : "Rot:"}</span>
+                    <span className="tool-opt-value">{Math.round(floatingSubject.rotation || 0)}°</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRotateSubject(-90)}
+                      className="studio-pill studio-pill-neutral"
+                      style={{ padding: "2px 6px", fontSize: "10px" }}
+                      title="تدوير -90°"
+                    >
+                      -90°
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRotateSubject(90)}
+                      className="studio-pill studio-pill-neutral"
+                      style={{ padding: "2px 6px", fontSize: "10px" }}
+                      title="تدوير +90°"
+                    >
+                      +90°
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRotateSubject(0, true)}
+                      className="studio-pill studio-pill-neutral"
+                      style={{ padding: "2px 6px", fontSize: "10px" }}
+                      title="استعادة زاوية 0°"
+                    >
+                      0°
+                    </button>
+                  </div>
+
+                  <div className="tool-bar-separator" />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="tool-opt-label">🎯 {currentLang === "ar" ? "محاذاة:" : "Align:"}</span>
+                    <button type="button" onClick={() => handleAlignSubject("center")} className="studio-pill studio-pill-neutral" style={{ padding: "2px 6px", fontSize: "10px" }} title="توسيط في المسرح">✛ المنتصف</button>
+                    <button type="button" onClick={() => handleAlignSubject("left")} className="studio-pill studio-pill-neutral" style={{ padding: "2px 6px", fontSize: "10px" }} title="أقصى اليسار">← اليسار</button>
+                    <button type="button" onClick={() => handleAlignSubject("right")} className="studio-pill studio-pill-neutral" style={{ padding: "2px 6px", fontSize: "10px" }} title="أقصى اليمين">اليمين →</button>
+                    <button type="button" onClick={handleFitSubjectToCanvas} className="studio-pill studio-pill-neutral" style={{ padding: "2px 6px", fontSize: "10px" }} title="ملاءمة الأبعاد">ملاءمة</button>
+                  </div>
+
+                  <div className="tool-bar-separator" />
+
+                  <button
+                    type="button"
+                    onClick={handleExportPureSubject}
+                    className="studio-pill studio-pill-bg"
+                    style={{ padding: "3px 10px", fontSize: "11px" }}
+                    title="تصدير العنصر المعزول كـ PNG شفاف نقي"
+                  >
+                    📥 {currentLang === "ar" ? "تصدير PNG شفاف" : "Export PNG"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "شكل التحديد:" : "Shape:"}</span>
+                    <div className="tool-mode-group">
+                      <button
+                        type="button"
+                        onClick={() => setSelectionShape("rectangle")}
+                        className={`tool-mode-btn ${selectionShape === "rectangle" ? "active" : ""}`}
+                      >
+                        {currentLang === "ar" ? "مستطيل" : "Rectangle"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectionShape("ellipse")}
+                        className={`tool-mode-btn ${selectionShape === "ellipse" ? "active" : ""}`}
+                      >
+                        {currentLang === "ar" ? "بيضاوي" : "Ellipse"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectionShape("free")}
+                        className={`tool-mode-btn ${selectionShape === "free" ? "active" : ""}`}
+                      >
+                        {currentLang === "ar" ? "حر (Lasso)" : "Free"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="tool-bar-separator" />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="tool-opt-label">{currentLang === "ar" ? "الوضع:" : "Mode:"}</span>
+                    <div className="tool-mode-group">
+                      <button
+                        type="button"
+                        onClick={() => setSelectionMode("replace")}
+                        className={`tool-mode-btn ${selectionMode === "replace" ? "active" : ""}`}
+                      >
+                        جديد
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectionMode("add")}
+                        className={`tool-mode-btn ${selectionMode === "add" ? "active" : ""}`}
+                      >
+                        + إضافة
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectionMode("subtract")}
+                        className={`tool-mode-btn ${selectionMode === "subtract" ? "active" : ""}`}
+                      >
+                        - طرح
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="tool-bar-separator" />
+
+                  <button
+                    type="button"
+                    onClick={() => handleEnableFreeTransformOnLayer(selectedLayer)}
+                    className="studio-pill studio-pill-neutral"
+                    style={{ padding: "3px 10px", fontSize: "11px" }}
+                    title="تفعيل التحويل الحر (8 مقاود + تدوير) للطبقة الحالية"
+                  >
+                    📐 {currentLang === "ar" ? "تحويل حر للطبقة الحالية" : "Free Transform Layer"}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -4449,7 +4704,7 @@ export default function Home() {
           {(activeTool === "clone" || activeTool === "heal") && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentLang === "ar" ? "نصف القطر:" : "Radius:"}</span>
+                <span className="tool-opt-label">{currentLang === "ar" ? "نصف القطر:" : "Radius:"}</span>
                 <input
                   type="range"
                   min={5}
@@ -4458,9 +4713,9 @@ export default function Home() {
                   onChange={(e) => setRetouchRadius(Number(e.target.value))}
                   style={{ width: "80px", accentColor: "#38bdf8" }}
                 />
-                <span style={{ fontSize: "11px", minWidth: "30px", fontFamily: "monospace" }}>{retouchRadius}px</span>
+                <span className="tool-opt-value">{retouchRadius}px</span>
               </div>
-              <span style={{ fontSize: "10px", color: "#38bdf8" }}>
+              <span style={{ fontSize: "10px", color: "var(--studio-accent)" }}>
                 {currentLang === "ar" ? "💡 اضغط Alt + نقر لتحديد نقطة المصدر" : "💡 Alt + click to set source point"}
               </span>
             </div>
@@ -4481,7 +4736,7 @@ export default function Home() {
               ))}
             </div>
             {/* Fixed bottom section */}
-            <div style={{ flexShrink: 0, borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "10px 0 12px", background: "#172323" }}>
+            <div className="tool-rail-bottom">
               <button className="tool-button" onClick={() => uploadRef.current?.click()} aria-label="رفع صورة" title="فتح صورة من الجهاز">
                 <Upload size={18} />
               </button>
@@ -4493,7 +4748,7 @@ export default function Home() {
                 onClick={() => setHelpOpen(true)}
                 aria-label="دليل المستخدم"
                 title="📖 دليل المستخدم — مساعدة"
-                style={{ color: "#2dd4bf" }}
+                style={{ color: "var(--studio-accent)" }}
               >
                 <Info size={18} />
               </button>
@@ -4526,23 +4781,7 @@ export default function Home() {
                   type="button"
                   onClick={swapColors}
                   title="تبديل اللون الأمامي والخلفي (X)"
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    borderRadius: "3px",
-                    color: "#2dd4bf",
-                    cursor: "pointer",
-                    width: "16px",
-                    height: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "absolute",
-                    bottom: "-6px",
-                    left: "-4px",
-                    zIndex: 11,
-                    padding: 0
-                  }}
+                  className="color-swap-btn"
                 >
                   <RefreshCw size={9} />
                 </button>
@@ -4798,6 +5037,58 @@ export default function Home() {
                     }}
                   >
                     <span>{activeTool === "crop" ? `منطقة القص: ${Math.round(selection.width)} × ${Math.round(selection.height)}` : selectionShape === "ellipse" ? "تحديد بيضاوي" : selectionShape === "free" ? "تحديد حر" : "تحديد مستطيل"}</span>
+                  </div>
+                )}
+
+                {/* Section 13: 8-Handle Interactive Free Transform Box */}
+                {floatingSubject && activeTool === "select" && (
+                  <div
+                    className="free-transform-box"
+                    style={{
+                      left: `${(floatingSubject.x / Math.max(1, canvasRef.current?.width || 1)) * 100}%`,
+                      top: `${(floatingSubject.y / Math.max(1, canvasRef.current?.height || 1)) * 100}%`,
+                      width: `${(floatingSubject.width / Math.max(1, canvasRef.current?.width || 1)) * 100}%`,
+                      height: `${(floatingSubject.height / Math.max(1, canvasRef.current?.height || 1)) * 100}%`,
+                      transform: floatingSubject.rotation ? `rotate(${floatingSubject.rotation}deg)` : undefined,
+                    }}
+                    onPointerMove={handleTransformPointerMove}
+                    onPointerUp={handleTransformPointerUp}
+                  >
+                    {/* Move surface */}
+                    <div
+                      className="transform-drag-surface"
+                      onPointerDown={(e) => handleTransformPointerDown(e, "move")}
+                      title={currentLang === "ar" ? "اسحب لتحريك العنصر" : "Drag to move subject"}
+                    />
+
+                    {/* Rotation stem and circular pip handle */}
+                    <div className="transform-rot-stem" />
+                    <div
+                      className="transform-rot-handle"
+                      onPointerDown={(e) => handleTransformPointerDown(e, "rot")}
+                      title={currentLang === "ar" ? "اسحب للتدوير الحر (↻)" : "Drag to rotate"}
+                    >
+                      ↻
+                    </div>
+
+                    {/* 4 Corner handles */}
+                    <div className="transform-handle transform-handle-nw" onPointerDown={(e) => handleTransformPointerDown(e, "nw")} title="تغيير الحجم من الزاوية" />
+                    <div className="transform-handle transform-handle-ne" onPointerDown={(e) => handleTransformPointerDown(e, "ne")} title="تغيير الحجم من الزاوية" />
+                    <div className="transform-handle transform-handle-se" onPointerDown={(e) => handleTransformPointerDown(e, "se")} title="تغيير الحجم من الزاوية" />
+                    <div className="transform-handle transform-handle-sw" onPointerDown={(e) => handleTransformPointerDown(e, "sw")} title="تغيير الحجم من الزاوية" />
+
+                    {/* 4 Edge handles */}
+                    <div className="transform-handle transform-handle-n" onPointerDown={(e) => handleTransformPointerDown(e, "n")} title="تغيير الارتفاع لأعلى" />
+                    <div className="transform-handle transform-handle-s" onPointerDown={(e) => handleTransformPointerDown(e, "s")} title="تغيير الارتفاع لأسفل" />
+                    <div className="transform-handle transform-handle-w" onPointerDown={(e) => handleTransformPointerDown(e, "w")} title="تغيير العرض لليسار" />
+                    <div className="transform-handle transform-handle-e" onPointerDown={(e) => handleTransformPointerDown(e, "e")} title="تغيير العرض لليمين" />
+
+                    {/* Live Transform HUD Badge */}
+                    <div className="transform-hud">
+                      <span>📐 {Math.round(floatingSubject.width)} × {Math.round(floatingSubject.height)} px</span>
+                      <span>•</span>
+                      <span>↻ {Math.round(floatingSubject.rotation || 0)}°</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5187,6 +5478,9 @@ export default function Home() {
                           </button>
                           <button onClick={centerSelectedLayer} title="توسيط الطبقة المحددة في مساحة العمل">
                             ✛ توسيط
+                          </button>
+                          <button onClick={() => handleEnableFreeTransformOnLayer(selectedLayer)} title="تحويل حر ومباشر (8 مقاود + تدوير 360°)">
+                            📐 تحويل حر
                           </button>
                         </div>
                       </div>
