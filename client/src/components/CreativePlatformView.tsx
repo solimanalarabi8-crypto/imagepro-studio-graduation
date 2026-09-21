@@ -44,7 +44,7 @@ import {
   StockPhotoItem,
   StockPhotoCategory
 } from "@/lib/stock-photos-library";
-import { StoredProjectMetadata } from "@/lib/project-persistence";
+import { StoredProjectMetadata } from "@/lib/autosave-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface CreativePlatformViewProps {
@@ -877,6 +877,7 @@ export const CreativePlatformView: React.FC<CreativePlatformViewProps> = ({
               <p className="text-xs text-slate-400 mt-0.5">
                 {isAr ? "استأنف مشاريعك السابقة المحفوظة بأمان محلياً مع كافة الطبقات وسجل التعديلات" : "Resume your previously saved projects with complete layers and history"}
               </p>
+            </div>
           </div>
 
           {projects.length === 0 ? (

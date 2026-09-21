@@ -72,6 +72,7 @@ import {
   type StoredProjectMetadata,
 } from "@/lib/autosave-manager";
 import { type CreativeBackdropPreset } from "@/lib/creative-backgrounds";
+import { type ProductBackgroundPreset } from "@/lib/product-backgrounds";
 import { type EditableTemplate } from "@/lib/editable-templates";
 import { type AssetGraphicItem } from "@/lib/assets-library";
 import {
@@ -2303,7 +2304,7 @@ export default function Home() {
   };
 
   // Phase 4 & 5: Creative Library Handlers (Backgrounds, Templates, Assets)
-  const handleApplyCreativeBackground = (preset: CreativeBackdropPreset) => {
+  const handleApplyCreativeBackground = (preset: CreativeBackdropPreset | ProductBackgroundPreset) => {
     const w = imageSize.width || 1080;
     const h = imageSize.height || 1080;
     const off = document.createElement("canvas");
@@ -2327,6 +2328,11 @@ export default function Home() {
         },
       ]);
       setImageSrc(bgData);
+      setHasCustomBackground(true);
+      if (cachedImageRef.current) {
+        cachedImageRef.current.src = bgData;
+      }
+      setTimeout(fitToScreen, 80);
       setStatus(currentLang === "ar" ? `تم تطبيق خلفية: ${preset.nameAr}` : `Applied backdrop: ${preset.nameEn}`);
     }
   };
@@ -5505,18 +5511,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 1. زر Premium واضح في الشريط العلوي: "＋ تصميم جديد" */}
-            <button
-              type="button"
-              className="premium-new-design-btn"
-              onClick={() => setIsNewDesignModalOpen(true)}
-              title={currentLang === "ar" ? "＋ تصميم جديد (جميع المقاسات والمنصات والتصنيفات)" : "＋ New Design (All Sizes & Categories)"}
-              data-testid="premium-new-design-btn"
-            >
-              <Plus size={14} className="text-white" />
-              <span>{currentLang === "ar" ? "＋ تصميم جديد" : "＋ New Design"}</span>
-            </button>
-
             <nav className="command-nav" aria-label="القائمة الرئيسية">
               {/* 1. قائمة ملف File Menu */}
               <div className="app-dropdown-container">
@@ -7391,8 +7385,11 @@ export default function Home() {
                     <button
                       type="button"
                       className="sidebar-studio-btn sidebar-studio-btn-ai"
-                      onClick={handlePureContentCutout}
-                      title="عزل العنصر الأساسي بالذكاء الاصطناعي بدقة متناهية"
+                      onClick={() => {
+                        setPropertiesSection("ai");
+                        handlePureContentCutout();
+                      }}
+                      title="عزل العنصر الأساسي وتأثيرات الخلفية بالذكاء الاصطناعي بدقة متناهية"
                     >
                       <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <WandSparkles size={14} />
@@ -7457,10 +7454,11 @@ export default function Home() {
                     <button
                       type="button"
                       className={`properties-sub-pill ${propertiesSection === "ai" ? "active" : ""}`}
-                      onClick={() => { setPropertiesSection("ai"); setStatus("ستوديو الذكاء الاصطناعي والتنقيح"); }}
+                      onClick={() => { setPropertiesSection("ai"); setStatus("ستوديو عزل الأجسام وتأثيرات الخلفية والذكاء الاصطناعي"); }}
+                      title="عزل الأجسام وتأثيرات الخلفية، تمويه البورتريه، واستبدال الخلفيات"
                     >
                       <span>✨</span>
-                      <span>الذكاء AI</span>
+                      <span>العزل والخلفية AI</span>
                     </button>
                   </div>
 
@@ -8957,6 +8955,7 @@ export default function Home() {
           isOpen={isTemplatesModalOpen}
           onClose={() => setIsTemplatesModalOpen(false)}
           lang={currentLang}
+          onApplyTemplate={handleApplyEditableTemplate}
           onCreateNewProject={({ width, height, background, templateName }) => {
             setImageSize({ width, height });
             const off = document.createElement("canvas");
@@ -9139,6 +9138,8 @@ export default function Home() {
           isOpen={isNewDesignModalOpen}
           onClose={() => setIsNewDesignModalOpen(false)}
           onCreateNewProject={handleCreateNewProjectFromModal}
+          onApplyTemplate={handleApplyEditableTemplate}
+          onApplyBackground={handleApplyCreativeBackground}
           onOpenTemplates={() => setIsTemplatesModalOpen(true)}
           lang={currentLang}
         />

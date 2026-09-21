@@ -14,6 +14,7 @@ export type AssetCategory =
   | "patterns"
   | "gradients"
   | "3d"
+  | "commerce"
   | "decorative";
 
 export interface AssetGraphicItem {

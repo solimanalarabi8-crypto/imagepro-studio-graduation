@@ -19,6 +19,10 @@ export type BackdropCategory =
   | "fashion"
   | "food"
   | "product"
+  | "beauty"
+  | "business"
+  | "3d"
+  | "minimal"
   | "abstract"
   | "gradients";
 
@@ -49,6 +53,10 @@ export const CREATIVE_BACKDROP_CATEGORIES: { id: BackdropCategory | "all"; nameA
   { id: "fashion", nameAr: "أزياء", nameEn: "Fashion", icon: "👗" },
   { id: "food", nameAr: "مأكولات", nameEn: "Food", icon: "☕" },
   { id: "product", nameAr: "تصوير منتجات", nameEn: "Product Photography", icon: "🛍️" },
+  { id: "beauty", nameAr: "تجميل ومكياج", nameEn: "Beauty & Cosmetics", icon: "💄" },
+  { id: "business", nameAr: "أعمال وتجارة", nameEn: "Business & Corporate", icon: "💼" },
+  { id: "3d", nameAr: "ثلاثي الأبعاد", nameEn: "3D Geometrics", icon: "🧊" },
+  { id: "minimal", nameAr: "مينيمال وبسيط", nameEn: "Minimalist", icon: "⚪" },
   { id: "abstract", nameAr: "تجريدي", nameEn: "Abstract", icon: "🎨" },
   { id: "gradients", nameAr: "تدرجات", nameEn: "Gradients", icon: "🌈" },
 ];

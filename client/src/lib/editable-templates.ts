@@ -4,6 +4,7 @@
  */
 
 export type TemplateCategory =
+  | "social"
   | "instagram"
   | "facebook"
   | "tiktok"
@@ -69,7 +70,849 @@ export const TEMPLATE_CATEGORIES: { id: TemplateCategory | "all"; nameAr: string
 ];
 
 export const EDITABLE_TEMPLATES: EditableTemplate[] = [
-  // 1. Instagram Commercial Sale (1080x1080)
+  // ── Canva Suite Grade 1: Certificate of Authenticity & Recognition (A4 / 2000x1414) ──
+  {
+    id: "cert-authenticity-gold",
+    nameAr: "شهادة أصالة وتوثيق فنية كلاسيكية مذهبة",
+    nameEn: "Certificate of Authenticity & Fine Art",
+    category: "education",
+    width: 2000,
+    height: 1414,
+    aspect: "1.41:1",
+    tags: ["certificate", "authenticity", "gold", "art", "شهادة", "توثيق", "أصالة"],
+    layers: [
+      { id: "bg-parchment", name: "خلفية الورق العاجي الفاخر", kind: "background", color: "#faf8f2" },
+      { id: "frame-outer", name: "الإطار الخارجي الذهبي", kind: "shape", shapeType: "rectangle", x: 70, y: 70, width: 1860, height: 1274, color: "#d4af37" },
+      { id: "frame-inner", name: "الإطار الداخلي الرفيع", kind: "shape", shapeType: "rectangle", x: 95, y: 95, width: 1810, height: 1224, color: "rgba(184,134,11,0.6)" },
+      { id: "seal-ribbon", name: "شريطة الختم الملكي", kind: "shape", shapeType: "badge", x: 260, y: 1040, width: 160, height: 180, color: "#b8860b" },
+      { id: "title-main", name: "عنوان الشهادة", kind: "text", text: "CERTIFICATE OF AUTHENTICITY", x: 1000, y: 220, fontSize: 56, color: "#2d2a26", fontWeight: "bold" },
+      { id: "subtitle", name: "العنوان الفرعي", kind: "text", text: "of Original Artwork & Archival Master", x: 1000, y: 290, fontSize: 34, color: "#786d5e", fontWeight: "normal" },
+      { id: "recipient", name: "اسم المستلم / الفنان", kind: "text", text: "Presented to: Olivia Wilson", x: 1000, y: 390, fontSize: 44, color: "#1f2937", fontWeight: "bold" },
+      { id: "meta-title", name: "بيانات العمل: العنوان", kind: "text", text: "Title of the Artwork: Serenade of Twilight", x: 1000, y: 550, fontSize: 26, color: "#4b5563" },
+      { id: "meta-artist", name: "بيانات العمل: الفنان", kind: "text", text: "Artist's Name: Elena Rostova", x: 1000, y: 620, fontSize: 26, color: "#4b5563" },
+      { id: "meta-medium", name: "بيانات العمل: الخامة", kind: "text", text: "Medium / Materials: Oil on Canvas & 24K Gold Leaf", x: 1000, y: 690, fontSize: 26, color: "#4b5563" },
+      { id: "meta-dims", name: "بيانات العمل: الأبعاد", kind: "text", text: "Dimensions: 120 × 90 cm (Archival Edition 1/1)", x: 1000, y: 760, fontSize: 26, color: "#4b5563" },
+      { id: "sig-author", name: "توقيع المعتمد", kind: "text", text: "Authorized Curator Signature", x: 1400, y: 1140, fontSize: 22, color: "#6b7280" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      const bgGrad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.7);
+      bgGrad.addColorStop(0, "#ffffff");
+      bgGrad.addColorStop(0.7, "#faf6ed");
+      bgGrad.addColorStop(1, "#f3eedd");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "#c59f42";
+      ctx.lineWidth = Math.max(2, w * 0.005);
+      ctx.strokeRect(w * 0.045, h * 0.045, w * 0.91, h * 0.91);
+
+      ctx.strokeStyle = "rgba(197, 159, 66, 0.4)";
+      ctx.lineWidth = Math.max(1, w * 0.002);
+      ctx.strokeRect(w * 0.055, h * 0.055, w * 0.89, h * 0.89);
+
+      const drawCorner = (cx: number, cy: number, flipX: number, flipY: number) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(flipX, flipY);
+        ctx.strokeStyle = "#b3882f";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, w * 0.035, 0, Math.PI / 2);
+        ctx.moveTo(w * 0.015, w * 0.015);
+        ctx.lineTo(w * 0.035, w * 0.035);
+        ctx.stroke();
+        ctx.restore();
+      };
+      drawCorner(w * 0.055, h * 0.055, 1, 1);
+      drawCorner(w * 0.945, h * 0.055, -1, 1);
+      drawCorner(w * 0.055, h * 0.945, 1, -1);
+      drawCorner(w * 0.945, h * 0.945, -1, -1);
+
+      ctx.fillStyle = "#2c2722";
+      ctx.font = `bold ${Math.round(h * 0.055)}px "Times New Roman", serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("CERTIFICATE", w / 2, h * 0.16);
+      ctx.font = `italic 400 ${Math.round(h * 0.038)}px "Times New Roman", serif`;
+      ctx.fillText("of Authenticity", w / 2, h * 0.22);
+
+      ctx.fillStyle = "#8a7b6b";
+      ctx.font = `300 ${Math.round(h * 0.022)}px sans-serif`;
+      ctx.fillText("THIS CERTIFIES THAT THE PIECE DESCRIBED IS AN ORIGINAL ARCHIVAL WORK", w / 2, h * 0.27);
+
+      const thumbW = w * 0.22;
+      const thumbH = h * 0.38;
+      const thumbX = w * 0.1;
+      const thumbY = h * 0.35;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(thumbX, thumbY, thumbW, thumbH);
+      ctx.strokeStyle = "#c59f42";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(thumbX, thumbY, thumbW, thumbH);
+
+      const artGrad = ctx.createLinearGradient(thumbX, thumbY, thumbX, thumbY + thumbH);
+      artGrad.addColorStop(0, "#d8b4e2");
+      artGrad.addColorStop(0.4, "#fcd34d");
+      artGrad.addColorStop(0.7, "#38bdf8");
+      artGrad.addColorStop(1, "#1e3a8a");
+      ctx.fillStyle = artGrad;
+      ctx.fillRect(thumbX + 4, thumbY + 4, thumbW - 8, thumbH - 8);
+
+      ctx.textAlign = "left";
+      const startX = w * 0.38;
+      const fields = [
+        ["Title of the Artwork:", "Serenade of Twilight"],
+        ["Artist's Name:", "Olivia Wilson"],
+        ["Medium/Materials:", "Oil on Linen & 24K Gold Leaf"],
+        ["Dimensions:", "120 × 90 cm"],
+        ["Date of Creation:", "September 2026"]
+      ];
+      fields.forEach(([lbl, val], idx) => {
+        const rowY = h * 0.36 + idx * (h * 0.075);
+        ctx.fillStyle = "#4a4238";
+        ctx.font = `bold ${Math.round(h * 0.024)}px sans-serif`;
+        ctx.fillText(lbl, startX, rowY);
+        ctx.fillStyle = "#1e293b";
+        ctx.font = `${Math.round(h * 0.024)}px sans-serif`;
+        ctx.fillText(val, startX + w * 0.24, rowY);
+        ctx.strokeStyle = "rgba(197, 159, 66, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(startX, rowY + 6);
+        ctx.lineTo(w * 0.88, rowY + 6);
+        ctx.stroke();
+      });
+
+      const sealX = w * 0.21;
+      const sealY = h * 0.84;
+      const sealR = h * 0.08;
+      const sealGrad = ctx.createRadialGradient(sealX, sealY, 5, sealX, sealY, sealR);
+      sealGrad.addColorStop(0, "#fde68a");
+      sealGrad.addColorStop(0.5, "#d97706");
+      sealGrad.addColorStop(1, "#92400e");
+      ctx.fillStyle = sealGrad;
+      ctx.beginPath();
+      ctx.arc(sealX, sealY, sealR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fef08a";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.02)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("OFFICIAL", sealX, sealY - 4);
+      ctx.fillText("SEAL", sealX, sealY + 12);
+
+      const sigX = w * 0.65;
+      const sigY = h * 0.84;
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sigX, sigY);
+      ctx.lineTo(sigX + w * 0.22, sigY);
+      ctx.stroke();
+
+      ctx.fillStyle = "#1e293b";
+      ctx.font = `italic ${Math.round(h * 0.035)}px "Brush Script MT", cursive, sans-serif`;
+      ctx.fillText("Olivia Wilson", sigX + w * 0.11, sigY - 8);
+
+      ctx.fillStyle = "#64748b";
+      ctx.font = `${Math.round(h * 0.018)}px sans-serif`;
+      ctx.fillText("Artist's Signature", sigX + w * 0.11, sigY + 18);
+    }
+  },
+
+  // ── Canva Suite Grade 2: Executive Modern Resume (Olivia Sanchez) ──
+  {
+    id: "cv-olivia-executive",
+    nameAr: "سيرة ذاتية تنفيذية عصرية ومنظمة (Canva Style)",
+    nameEn: "Executive Modern Resume & Portfolio",
+    category: "cv",
+    width: 1240,
+    height: 1754,
+    aspect: "1:1.41",
+    tags: ["cv", "resume", "executive", "portfolio", "سيرة ذاتية", "توظيف"],
+    layers: [
+      { id: "bg-white", name: "الخلفية البيضاء النقية", kind: "background", color: "#ffffff" },
+      { id: "header-strip", name: "شريط الرأس الرمادي الناعم", kind: "shape", shapeType: "rectangle", x: 0, y: 0, width: 1240, height: 260, color: "#f8fafc" },
+      { id: "divider-line", name: "خط التقسيم الرأسي", kind: "shape", shapeType: "rectangle", x: 420, y: 300, width: 2, height: 1380, color: "#e2e8f0" },
+      { id: "name-main", name: "اسم المرشح", kind: "text", text: "OLIVIA SANCHEZ", x: 620, y: 110, fontSize: 62, color: "#0f172a", fontWeight: "bold" },
+      { id: "title-role", name: "المسمى الوظيفي", kind: "text", text: "ADMINISTRATIVE & OPERATIONS MANAGER", x: 620, y: 170, fontSize: 26, color: "#0284c7", fontWeight: "bold" },
+      { id: "contact-strip", name: "بيانات التواصل", kind: "text", text: "olivia.sanchez@email.com • +1 (555) 234-5678 • New York, NY", x: 620, y: 220, fontSize: 20, color: "#64748b" },
+      { id: "summary-head", name: "عنوان النبذة", kind: "text", text: "EXECUTIVE SUMMARY", x: 100, y: 340, fontSize: 24, color: "#0f172a", fontWeight: "bold" },
+      { id: "summary-body", name: "نص النبذة المهنية", kind: "text", text: "Results-driven manager with 8+ years leading cross-functional teams in high-growth enterprises.", x: 100, y: 390, fontSize: 18, color: "#475569" },
+      { id: "exp-head", name: "عنوان الخبرات", kind: "text", text: "WORK EXPERIENCE", x: 460, y: 340, fontSize: 24, color: "#0f172a", fontWeight: "bold" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, w, h * 0.16);
+
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.038)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("OLIVIA SANCHEZ", w / 2, h * 0.065);
+
+      ctx.fillStyle = "#0284c7";
+      ctx.font = `bold ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("ADMINISTRATIVE & OPERATIONS MANAGER", w / 2, h * 0.098);
+
+      ctx.fillStyle = "#64748b";
+      ctx.font = `${Math.round(h * 0.013)}px sans-serif`;
+      ctx.fillText("olivia.sanchez@email.com   •   +1 (555) 234-5678   •   New York, NY", w / 2, h * 0.128);
+
+      const colX = w * 0.35;
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(colX, h * 0.18);
+      ctx.lineTo(colX, h * 0.95);
+      ctx.stroke();
+
+      ctx.textAlign = "left";
+      let ly = h * 0.2;
+
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("SUMMARY", w * 0.06, ly);
+      ly += h * 0.025;
+      ctx.fillStyle = "#475569";
+      ctx.font = `${Math.round(h * 0.012)}px sans-serif`;
+      ctx.fillText("Detail-oriented executive manager with", w * 0.06, ly);
+      ly += h * 0.02;
+      ctx.fillText("8+ years experience in enterprise systems,", w * 0.06, ly);
+      ly += h * 0.02;
+      ctx.fillText("cross-department workflows, and strategy.", w * 0.06, ly);
+
+      ly += h * 0.05;
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("CORE COMPETENCIES", w * 0.06, ly);
+      ly += h * 0.025;
+
+      const skills = ["Strategic Planning", "Project Management", "Financial Reporting", "Team Leadership", "Data Analytics"];
+      skills.forEach((sk) => {
+        ctx.fillStyle = "#0284c7";
+        ctx.beginPath();
+        ctx.arc(w * 0.075, ly - 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#334155";
+        ctx.font = `${Math.round(h * 0.012)}px sans-serif`;
+        ctx.fillText(sk, w * 0.095, ly);
+        ly += h * 0.028;
+      });
+
+      let ry = h * 0.2;
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.018)}px sans-serif`;
+      ctx.fillText("PROFESSIONAL EXPERIENCE", colX + w * 0.04, ry);
+      ry += h * 0.035;
+
+      const jobs = [
+        { role: "Senior Operations Director", company: "Aegis Global Enterprises", period: "2021 — PRESENT", bullet: "Managed operational workflows across 14 global offices with 22% ROI uplift." },
+        { role: "Administrative Lead", company: "Apex Creative Agency", period: "2018 — 2021", bullet: "Streamlined resource allocation and implemented digital asset collaboration pipelines." },
+        { role: "Operations Coordinator", company: "Vanguard Media Group", period: "2015 — 2018", bullet: "Coordinated cross-functional communications and managed client delivery timelines." }
+      ];
+
+      jobs.forEach((job) => {
+        ctx.fillStyle = "#0284c7";
+        ctx.beginPath();
+        ctx.arc(colX + w * 0.04, ry - 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.font = `bold ${Math.round(h * 0.015)}px sans-serif`;
+        ctx.fillText(job.role, colX + w * 0.06, ry);
+
+        ctx.fillStyle = "#0284c7";
+        ctx.font = `bold ${Math.round(h * 0.011)}px sans-serif`;
+        ctx.fillText(job.period, colX + w * 0.42, ry);
+        ry += h * 0.022;
+
+        ctx.fillStyle = "#64748b";
+        ctx.font = `italic ${Math.round(h * 0.012)}px sans-serif`;
+        ctx.fillText(job.company, colX + w * 0.06, ry);
+        ry += h * 0.025;
+
+        ctx.fillStyle = "#475569";
+        ctx.font = `${Math.round(h * 0.012)}px sans-serif`;
+        ctx.fillText(job.bullet, colX + w * 0.06, ry);
+        ry += h * 0.05;
+      });
+    }
+  },
+
+  // ── Canva Suite Grade 3: Split Face Editorial Art ("ABOUT" Portrait) ──
+  {
+    id: "poster-editorial-split",
+    nameAr: "بوستر فوتوغرافي مقسوم وفن تحريري (Canva Editorial)",
+    nameEn: "Split Face Editorial Art Poster",
+    category: "posters",
+    width: 1080,
+    height: 1350,
+    aspect: "4:5",
+    tags: ["poster", "editorial", "fashion", "split", "بوستر", "فوتوغرافي", "أزياء"],
+    layers: [
+      { id: "bg-dark", name: "الخلفية الداكنة الفاخرة", kind: "background", color: "#0c0a09" },
+      { id: "split-line", name: "خط الفصل العمودي", kind: "shape", shapeType: "rectangle", x: 539, y: 0, width: 2, height: 1350, color: "rgba(255,255,255,0.2)" },
+      { id: "brand-title", name: "العنوان الرئيسي", kind: "text", text: "A  B  O  U  T", x: 540, y: 650, fontSize: 68, color: "#ffffff", fontWeight: "bold" },
+      { id: "sub-editorial", name: "الوصف التحريري", kind: "text", text: "A NEW PERSPECTIVE ON HUMAN ESSENCE", x: 540, y: 720, fontSize: 22, color: "rgba(255,255,255,0.7)" },
+      { id: "footer-credits", name: "حقوق المعرض", kind: "text", text: "PARIS FASHION WEEK • ARCHIVE EDITION 2026", x: 540, y: 1260, fontSize: 18, color: "rgba(255,255,255,0.5)" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      ctx.fillStyle = "#1c1917";
+      ctx.fillRect(0, 0, w / 2, h);
+
+      const eyeGrad = ctx.createRadialGradient(w * 0.28, h * 0.45, 10, w * 0.28, h * 0.45, w * 0.25);
+      eyeGrad.addColorStop(0, "#e7e5e4");
+      eyeGrad.addColorStop(0.3, "#78716c");
+      eyeGrad.addColorStop(0.7, "#292524");
+      eyeGrad.addColorStop(1, "#1c1917");
+      ctx.fillStyle = eyeGrad;
+      ctx.beginPath();
+      ctx.ellipse(w * 0.28, h * 0.45, w * 0.2, h * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const rightGrad = ctx.createLinearGradient(w / 2, 0, w, h);
+      rightGrad.addColorStop(0, "#f5ebe0");
+      rightGrad.addColorStop(0.6, "#e3d5ca");
+      rightGrad.addColorStop(1, "#d5bdaf");
+      ctx.fillStyle = rightGrad;
+      ctx.fillRect(w / 2, 0, w / 2, h);
+
+      const faceGrad = ctx.createRadialGradient(w * 0.72, h * 0.45, 20, w * 0.72, h * 0.45, w * 0.25);
+      faceGrad.addColorStop(0, "#ffffff");
+      faceGrad.addColorStop(0.5, "#eddcd2");
+      faceGrad.addColorStop(1, "#cb997e");
+      ctx.fillStyle = faceGrad;
+      ctx.beginPath();
+      ctx.ellipse(w * 0.72, h * 0.45, w * 0.2, h * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w / 2, h);
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.045)}px "Didot", serif, sans-serif`;
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 10;
+      ctx.fillText("A   B   O   U   T", w / 2, h * 0.52);
+
+      ctx.shadowBlur = 0;
+      ctx.font = `300 ${Math.round(h * 0.015)}px sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillText("A NEW PERSPECTIVE ON HUMAN ESSENCE", w / 2, h * 0.56);
+
+      ctx.font = `600 ${Math.round(h * 0.013)}px sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillText("VOLUME N° 04", w * 0.15, h * 0.08);
+
+      ctx.fillText("PARIS EDITORIAL ARCHIVE   •   EST. 2026", w / 2, h * 0.94);
+    }
+  },
+
+  // ── Canva Suite Grade 4: Street Photography with Camera UI Overlay ──
+  {
+    id: "social-camera-viewfinder",
+    nameAr: "تصوير لايف ستايل ستريت مع واجهة الكاميرا الحية",
+    nameEn: "Street Photography & Camera HUD Overlay",
+    category: "instagram",
+    width: 1080,
+    height: 1080,
+    aspect: "1:1",
+    tags: ["camera", "street", "photography", "lifestyle", "hud", "تصوير", "كاميرا"],
+    layers: [
+      { id: "bg-photo", name: "صورة الشارع واللايف ستايل", kind: "background", color: "#3e322b" },
+      { id: "focus-bracket", name: "قوس التركيز البؤري الأصفر", kind: "shape", shapeType: "rectangle", x: 440, y: 440, width: 200, height: 200, color: "#eab308" },
+      { id: "shutter-btn", name: "زر التصوير الدائري", kind: "shape", shapeType: "ellipse", x: 500, y: 920, width: 80, height: 80, color: "#ffffff" },
+      { id: "mode-photo", name: "وضع التصوير النشط", kind: "text", text: "PHOTO", x: 540, y: 880, fontSize: 24, color: "#eab308", fontWeight: "bold" },
+      { id: "mode-video", name: "وضع الفيديو", kind: "text", text: "VIDEO", x: 410, y: 880, fontSize: 20, color: "#ffffff" },
+      { id: "mode-slomo", name: "وضع الحركة البطيئة", kind: "text", text: "SLO-MO", x: 280, y: 880, fontSize: 20, color: "#94a3b8" },
+      { id: "mode-square", name: "وضع المربع", kind: "text", text: "SQUARE", x: 670, y: 880, fontSize: 20, color: "#ffffff" },
+      { id: "hud-info", name: "بيانات العدسة", kind: "text", text: "4K • 60 FPS • RAW", x: 540, y: 80, fontSize: 22, color: "#ffffff" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      const groundGrad = ctx.createRadialGradient(w / 2, h * 0.5, 40, w / 2, h * 0.5, w * 0.7);
+      groundGrad.addColorStop(0, "#7c5e47");
+      groundGrad.addColorStop(0.5, "#4a3b32");
+      groundGrad.addColorStop(1, "#261e19");
+      ctx.fillStyle = groundGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      const shoeY = h * 0.48;
+      ctx.fillStyle = "#8a4f26";
+      ctx.beginPath();
+      ctx.ellipse(w * 0.5, shoeY, w * 0.22, h * 0.24, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.ellipse(w * 0.46, shoeY - h * 0.16, w * 0.1, h * 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const vig = ctx.createRadialGradient(w / 2, h / 2, w * 0.35, w / 2, h / 2, w * 0.65);
+      vig.addColorStop(0, "transparent");
+      vig.addColorStop(1, "rgba(0, 0, 0, 0.65)");
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `600 ${Math.round(h * 0.022)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("4K • 60 FPS", w / 2, h * 0.08);
+
+      ctx.textAlign = "left";
+      ctx.fillText("⚡ AUTO", w * 0.08, h * 0.08);
+      ctx.textAlign = "right";
+      ctx.fillText("RAW", w * 0.92, h * 0.08);
+
+      const rw = w * 0.18;
+      const rh = h * 0.18;
+      const rx = (w - rw) / 2;
+      const ry = (h - rh) / 2;
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 2;
+      const cornerLen = 14;
+
+      ctx.beginPath();
+      ctx.moveTo(rx, ry + cornerLen); ctx.lineTo(rx, ry); ctx.lineTo(rx + cornerLen, ry);
+      ctx.moveTo(rx + rw - cornerLen, ry); ctx.lineTo(rx + rw, ry); ctx.lineTo(rx + rw, ry + cornerLen);
+      ctx.moveTo(rx, ry + rh - cornerLen); ctx.lineTo(rx, ry + rh); ctx.lineTo(rx + cornerLen, ry + rh);
+      ctx.moveTo(rx + rw - cornerLen, ry + rh); ctx.lineTo(rx + rw, ry + rh); ctx.lineTo(rx + rw, ry + rh - cornerLen);
+      ctx.stroke();
+
+      const modeY = h * 0.84;
+      ctx.textAlign = "center";
+      ctx.font = `${Math.round(h * 0.02)}px sans-serif`;
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.fillText("SLO-MO", w * 0.18, modeY);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.fillText("VIDEO", w * 0.36, modeY);
+
+      ctx.fillStyle = "#eab308";
+      ctx.font = `bold ${Math.round(h * 0.022)}px sans-serif`;
+      ctx.fillText("PHOTO", w * 0.5, modeY);
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.font = `${Math.round(h * 0.02)}px sans-serif`;
+      ctx.fillText("SQUARE", w * 0.65, modeY);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.fillText("PANO", w * 0.82, modeY);
+
+      const shutX = w / 2;
+      const shutY = h * 0.92;
+      const shutR = h * 0.055;
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(shutX, shutY, shutR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(shutX, shutY, shutR * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  },
+
+  // ── Canva Suite Grade 5: Interior Design Pitch Deck (Modern Minimal) ──
+  {
+    id: "pres-interior-pitchdeck",
+    nameAr: "غلاف عرض تقديمي معماري داخلي فاخر (Pitch Deck)",
+    nameEn: "Interior Design Luxury Pitch Deck",
+    category: "presentations",
+    width: 1920,
+    height: 1080,
+    aspect: "16:9",
+    tags: ["presentation", "pitchdeck", "architecture", "interior", "عرض تقديمي", "معمار"],
+    layers: [
+      { id: "bg-olive", name: "الخلفية الزيتية الترابية الفاخرة", kind: "background", color: "#36362e" },
+      { id: "divider-line", name: "خط المنتصف لغلاف العرض", kind: "shape", shapeType: "rectangle", x: 959, y: 0, width: 2, height: 1080, color: "rgba(255,255,255,0.15)" },
+      { id: "photo-frame", name: "إطار الفتحة المعمارية", kind: "shape", shapeType: "rectangle", x: 1040, y: 120, width: 780, height: 840, color: "#45453b" },
+      { id: "tag-brand", name: "تصنيف التصميم", kind: "text", text: "Modern Minimal", x: 240, y: 460, fontSize: 32, color: "#d6d3d1" },
+      { id: "headline-main", name: "عنوان العرض التقديمي", kind: "text", text: "Interior Design\nPitch Deck", x: 240, y: 550, fontSize: 84, color: "#ffffff", fontWeight: "bold" },
+      { id: "studio-brand", name: "شعار الاستوديو المعماري", kind: "text", text: "LUMINA ARCHITECTS & PARTNERS • 2026", x: 240, y: 920, fontSize: 24, color: "#a8a29e" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      ctx.fillStyle = "#36362e";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w / 2, h);
+      ctx.stroke();
+
+      const archX = w * 0.54;
+      const archY = h * 0.12;
+      const archW = w * 0.41;
+      const archH = h * 0.76;
+
+      const archGrad = ctx.createLinearGradient(archX, archY, archX + archW, archY + archH);
+      archGrad.addColorStop(0, "#cbd5e1");
+      archGrad.addColorStop(0.3, "#94a3b8");
+      archGrad.addColorStop(0.65, "#52525b");
+      archGrad.addColorStop(1, "#27272a");
+      ctx.fillStyle = archGrad;
+      ctx.fillRect(archX, archY, archW, archH);
+
+      const sunBeam = ctx.createLinearGradient(archX + archW * 0.2, archY, archX + archW * 0.8, archY + archH);
+      sunBeam.addColorStop(0, "rgba(254, 243, 199, 0.35)");
+      sunBeam.addColorStop(1, "transparent");
+      ctx.fillStyle = sunBeam;
+      ctx.fillRect(archX, archY, archW, archH);
+
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#d6d3d1";
+      ctx.font = `300 ${Math.round(h * 0.03)}px "Times New Roman", serif`;
+      ctx.fillText("Modern Minimal", w * 0.08, h * 0.44);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `400 ${Math.round(h * 0.08)}px "Times New Roman", serif`;
+      ctx.fillText("Interior Design", w * 0.08, h * 0.54);
+      ctx.fillText("Pitch Deck", w * 0.08, h * 0.64);
+
+      ctx.fillStyle = "#a8a29e";
+      ctx.font = `300 ${Math.round(h * 0.02)}px sans-serif`;
+      ctx.fillText("LUMINA ARCHITECTS & PARTNERS   •   2026", w * 0.08, h * 0.9);
+
+      ctx.fillText("2026", w * 0.08, h * 0.12);
+    }
+  },
+
+  // ── Canva Suite Grade 6: Royal Emerald & Gold Gala Invitation ──
+  {
+    id: "inv-royal-wedding",
+    nameAr: "دعوة زفاف ومناسبات ملكية فاخرة بالذهب والزمرد",
+    nameEn: "Royal Emerald & Gold Luxury Gala Invitation",
+    category: "invitations",
+    width: 1080,
+    height: 1920,
+    aspect: "9:16",
+    tags: ["invitation", "wedding", "gold", "emerald", "luxury", "دعوة", "زفاف", "ملكي"],
+    layers: [
+      { id: "bg-emerald", name: "الخلفية الزمردية المخملية", kind: "background", color: "#031c15" },
+      { id: "gold-border", name: "الإطار الذهبي الملكي", kind: "shape", shapeType: "rectangle", x: 60, y: 60, width: 960, height: 1800, color: "#eab308" },
+      { id: "header-greeting", name: "التحية الترحيبية", kind: "text", text: "TOGETHER WITH THEIR FAMILIES", x: 540, y: 440, fontSize: 28, color: "#d1fae5" },
+      { id: "names-couple", name: "أسماء العروسين / الحفل", kind: "text", text: "Victoria & Alexander", x: 540, y: 580, fontSize: 72, color: "#fef08a", fontWeight: "bold" },
+      { id: "invitation-text", name: "نص الدعوة", kind: "text", text: "REQUEST THE HONOR OF YOUR PRESENCE", x: 540, y: 700, fontSize: 26, color: "#a7f3d0" },
+      { id: "date-details", name: "الموعد والمكان", kind: "text", text: "SATURDAY, DECEMBER 12TH, 2026\nAT SEVEN O'CLOCK IN THE EVENING", x: 540, y: 840, fontSize: 32, color: "#ffffff" },
+      { id: "venue-name", name: "اسم القاعة الفاخرة", kind: "text", text: "THE GRAND IMPERIAL PALACE • DUBAI", x: 540, y: 1020, fontSize: 28, color: "#fef08a" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      const emGrad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, h * 0.6);
+      emGrad.addColorStop(0, "#06372b");
+      emGrad.addColorStop(0.7, "#032018");
+      emGrad.addColorStop(1, "#01120d");
+      ctx.fillStyle = emGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let i = 0; i < 40; i++) {
+        const px = (Math.sin(i * 99) * 0.5 + 0.5) * w;
+        const py = (Math.cos(i * 37) * 0.5 + 0.5) * h;
+        const pr = Math.abs(Math.sin(i * 13)) * 2.5 + 0.5;
+        ctx.fillStyle = i % 2 === 0 ? "rgba(254, 240, 138, 0.6)" : "rgba(234, 179, 8, 0.4)";
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(w * 0.07, h * 0.04, w * 0.86, h * 0.92);
+
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(w * 0.085, h * 0.05, w * 0.83, h * 0.9);
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#d1fae5";
+      ctx.font = `300 ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("TOGETHER WITH THEIR FAMILIES", w / 2, h * 0.24);
+
+      ctx.fillStyle = "#fef08a";
+      ctx.font = `italic ${Math.round(h * 0.046)}px "Brush Script MT", "Times New Roman", cursive`;
+      ctx.fillText("Victoria & Alexander", w / 2, h * 0.32);
+
+      ctx.fillStyle = "#a7f3d0";
+      ctx.font = `300 ${Math.round(h * 0.015)}px sans-serif`;
+      ctx.fillText("INVITE YOU TO CELEBRATE THEIR WEDDING", w / 2, h * 0.4);
+
+      ctx.strokeStyle = "#eab308";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.35, h * 0.46);
+      ctx.lineTo(w * 0.65, h * 0.46);
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.02)}px sans-serif`;
+      ctx.fillText("SATURDAY • DEC 12 • 2026", w / 2, h * 0.52);
+
+      ctx.fillStyle = "#d1fae5";
+      ctx.font = `300 ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("AT SEVEN O'CLOCK IN THE EVENING", w / 2, h * 0.56);
+
+      ctx.fillStyle = "#fef08a";
+      ctx.font = `bold ${Math.round(h * 0.018)}px sans-serif`;
+      ctx.fillText("THE GRAND IMPERIAL PALACE", w / 2, h * 0.64);
+      ctx.fillStyle = "rgba(209, 250, 229, 0.7)";
+      ctx.font = `${Math.round(h * 0.014)}px sans-serif`;
+      ctx.fillText("RECEPTION TO FOLLOW", w / 2, h * 0.7);
+    }
+  },
+
+  // ── Canva Suite Grade 7: Instagram Fashion Promo with 3D Glossy Badge ──
+  {
+    id: "insta-fashion-pastel",
+    nameAr: "منشور إنستغرام للأزياء والموضة مع شارة خصم ثلاثية الأبعاد",
+    nameEn: "Pastel Fashion Sale with 3D Badge",
+    category: "instagram",
+    width: 1080,
+    height: 1080,
+    aspect: "1:1",
+    tags: ["fashion", "sale", "instagram", "pastel", "3d", "أزياء", "تخفيضات"],
+    layers: [
+      { id: "bg-pastel", name: "الخلفية الباستيل الوردية", kind: "background", color: "#fce7f3" },
+      { id: "badge-3d", name: "شارة الخصم الثلاثية الأبعاد", kind: "shape", shapeType: "badge", x: 120, y: 120, width: 220, height: 80, color: "#ec4899" },
+      { id: "badge-txt", name: "نص الخصم", kind: "text", text: "50% OFF", x: 230, y: 175, fontSize: 36, color: "#ffffff", fontWeight: "bold" },
+      { id: "title-main", name: "العنوان الرئيسي", kind: "text", text: "SUMMER\nCOLLECTION", x: 540, y: 820, fontSize: 62, color: "#1e1b4b", fontWeight: "bold" },
+      { id: "cta-pill", name: "زر التسوق", kind: "shape", shapeType: "rectangle", x: 415, y: 920, width: 250, height: 60, color: "#0f172a" },
+      { id: "cta-txt", name: "نص زر التسوق", kind: "text", text: "SHOP NOW →", x: 540, y: 960, fontSize: 24, color: "#ffffff", fontWeight: "bold" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      const pGrad = ctx.createLinearGradient(0, 0, w, h);
+      pGrad.addColorStop(0, "#fee2e2");
+      pGrad.addColorStop(0.5, "#fce7f3");
+      pGrad.addColorStop(1, "#f3e8ff");
+      ctx.fillStyle = pGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = "rgba(244, 114, 182, 0.15)";
+      ctx.beginPath();
+      ctx.ellipse(w * 0.5, h * 0.45, w * 0.38, h * 0.38, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.shadowColor = "rgba(15, 23, 42, 0.2)";
+      ctx.shadowBlur = 25;
+      ctx.shadowOffsetY = 15;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.25, h * 0.2, w * 0.5, h * 0.55, 24);
+      ctx.fill();
+      ctx.restore();
+
+      const innerGrad = ctx.createLinearGradient(w * 0.25, h * 0.2, w * 0.75, h * 0.75);
+      innerGrad.addColorStop(0, "#fda4af");
+      innerGrad.addColorStop(1, "#c084fc");
+      ctx.fillStyle = innerGrad;
+      ctx.beginPath();
+      ctx.roundRect(w * 0.27, h * 0.22, w * 0.46, h * 0.51, 18);
+      ctx.fill();
+
+      ctx.save();
+      ctx.shadowColor = "rgba(236, 72, 153, 0.45)";
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 8;
+      ctx.fillStyle = "#ec4899";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.12, h * 0.12, w * 0.26, h * 0.08, 12);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.038)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("50% OFF", w * 0.25, h * 0.175);
+
+      ctx.fillStyle = "#1e1b4b";
+      ctx.font = `bold ${Math.round(h * 0.055)}px sans-serif`;
+      ctx.fillText("SUMMER ESSENTIALS", w / 2, h * 0.84);
+
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.35, h * 0.88, w * 0.3, h * 0.065, 30);
+      ctx.fill();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.022)}px sans-serif`;
+      ctx.fillText("SHOP NOW →", w / 2, h * 0.922);
+    }
+  },
+
+  // ── Canva Suite Grade 8: Modern Tech Newsletter (Email Design) ──
+  {
+    id: "email-tech-newsletter",
+    nameAr: "تصميم بريد إلكتروني ونشرة تقنية حديثة",
+    nameEn: "Modern Tech Email Newsletter",
+    category: "marketing",
+    width: 1200,
+    height: 1600,
+    aspect: "3:4",
+    tags: ["email", "newsletter", "tech", "marketing", "بريد", "نشرة"],
+    layers: [
+      { id: "bg-canvas", name: "الخلفية العامة الفاتحة", kind: "background", color: "#f1f5f9" },
+      { id: "main-card", name: "بطاقة النشرة البيضاء", kind: "shape", shapeType: "rectangle", x: 100, y: 60, width: 1000, height: 1480, color: "#ffffff" },
+      { id: "hero-img", name: "صورة المقال الرئيسي", kind: "shape", shapeType: "rectangle", x: 160, y: 220, width: 880, height: 440, color: "#0284c7" },
+      { id: "logo-txt", name: "شعار النشرة", kind: "text", text: "THE DESIGN WIRE • ISSUE #48", x: 600, y: 140, fontSize: 32, color: "#0f172a", fontWeight: "bold" },
+      { id: "article-title", name: "عنوان المقال الرئيسي", kind: "text", text: "The Next Era of Generative Creative Tools", x: 600, y: 740, fontSize: 44, color: "#0f172a", fontWeight: "bold" },
+      { id: "cta-btn", name: "زر القراءة", kind: "shape", shapeType: "rectangle", x: 450, y: 920, width: 300, height: 70, color: "#2563eb" },
+      { id: "cta-txt", name: "نص الزر", kind: "text", text: "Read Full Article →", x: 600, y: 965, fontSize: 24, color: "#ffffff", fontWeight: "bold" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.08, h * 0.04, w * 0.84, h * 0.92, 16);
+      ctx.fill();
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.024)}px sans-serif`;
+      ctx.fillText("THE DESIGN WIRE   •   ISSUE #48", w / 2, h * 0.09);
+
+      const heroGrad = ctx.createLinearGradient(w * 0.12, h * 0.13, w * 0.88, h * 0.42);
+      heroGrad.addColorStop(0, "#3b82f6");
+      heroGrad.addColorStop(0.5, "#8b5cf6");
+      heroGrad.addColorStop(1, "#ec4899");
+      ctx.fillStyle = heroGrad;
+      ctx.beginPath();
+      ctx.roundRect(w * 0.12, h * 0.13, w * 0.76, h * 0.28, 12);
+      ctx.fill();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.03)}px sans-serif`;
+      ctx.fillText("The Next Era of Generative Creative Tools", w / 2, h * 0.47);
+
+      ctx.fillStyle = "#64748b";
+      ctx.font = `${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("How modern browser engines are revolutionizing high-precision digital art.", w / 2, h * 0.51);
+
+      ctx.fillStyle = "#2563eb";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.35, h * 0.54, w * 0.3, h * 0.045, 8);
+      ctx.fill();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.fillText("Read Full Article →", w / 2, h * 0.57);
+
+      const cy = h * 0.65;
+      const cw = w * 0.36;
+      const ch = h * 0.22;
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.12, cy, cw, ch, 8);
+      ctx.fill();
+      ctx.fillStyle = "#10b981";
+      ctx.fillRect(w * 0.12, cy, cw, ch * 0.45);
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.014)}px sans-serif`;
+      ctx.fillText("Design Systems in 2026", w * 0.12 + cw / 2, cy + ch * 0.62);
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.beginPath();
+      ctx.roundRect(w * 0.52, cy, cw, ch, 8);
+      ctx.fill();
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillRect(w * 0.52, cy, cw, ch * 0.45);
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `bold ${Math.round(h * 0.014)}px sans-serif`;
+      ctx.fillText("Typography & Visual Rhythm", w * 0.52 + cw / 2, cy + ch * 0.62);
+    }
+  },
+
+  // ── Canva Suite Grade 9: Polaroid Aesthetic Story (9:16) ──
+  {
+    id: "story-polaroid-aesthetic",
+    nameAr: "قصة إنستغرام بستايل بولارويد فوتوغرافي جمالي",
+    nameEn: "Polaroid Aesthetic Story & Memories",
+    category: "tiktok",
+    width: 1080,
+    height: 1920,
+    aspect: "9:16",
+    tags: ["story", "polaroid", "aesthetic", "memories", "instagram", "قصة", "بولارويد"],
+    layers: [
+      { id: "bg-warm", name: "الخلفية البيج الدافئة", kind: "background", color: "#f5ebe0" },
+      { id: "washi-tape", name: "شريط التثبيت اللاصق", kind: "shape", shapeType: "rectangle", x: 440, y: 340, width: 200, height: 45, color: "rgba(214,211,209,0.85)" },
+      { id: "polaroid-frame", name: "إطار البولارويد الأبيض", kind: "shape", shapeType: "rectangle", x: 180, y: 380, width: 720, height: 900, color: "#ffffff" },
+      { id: "caption-handwritten", name: "التعليق المكتوب بخط اليد", kind: "text", text: "golden hour memories ✨", x: 540, y: 1200, fontSize: 44, color: "#44403c" },
+      { id: "date-stamp", name: "تاريخ الذكرى", kind: "text", text: "SEPTEMBER 2026", x: 540, y: 1250, fontSize: 24, color: "#a8a29e" }
+    ],
+    renderPreview: (ctx, w, h) => {
+      const bGrad = ctx.createLinearGradient(0, 0, 0, h);
+      bGrad.addColorStop(0, "#fdfcf7");
+      bGrad.addColorStop(1, "#f3eedf");
+      ctx.fillStyle = bGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(w / 2, h * 0.44);
+      ctx.rotate(-0.035);
+
+      ctx.shadowColor = "rgba(41, 37, 36, 0.18)";
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetY = 15;
+
+      const pw = w * 0.72;
+      const ph = h * 0.52;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(w / 2, h * 0.44);
+      ctx.rotate(-0.035);
+      const iw = pw * 0.88;
+      const ih = ph * 0.72;
+      const photoGrad = ctx.createLinearGradient(-iw / 2, -ph / 2 + 15, iw / 2, -ph / 2 + 15 + ih);
+      photoGrad.addColorStop(0, "#f97316");
+      photoGrad.addColorStop(0.5, "#ec4899");
+      photoGrad.addColorStop(1, "#8b5cf6");
+      ctx.fillStyle = photoGrad;
+      ctx.fillRect(-iw / 2, -ph / 2 + 18, iw, ih);
+
+      ctx.fillStyle = "#44403c";
+      ctx.font = `italic ${Math.round(h * 0.024)}px "Brush Script MT", "Times New Roman", cursive`;
+      ctx.textAlign = "center";
+      ctx.fillText("golden hour memories ✨", 0, ph / 2 - 35);
+
+      ctx.fillStyle = "#a8a29e";
+      ctx.font = `300 ${Math.round(h * 0.012)}px sans-serif`;
+      ctx.fillText("SEPTEMBER 2026", 0, ph / 2 - 14);
+
+      ctx.fillStyle = "rgba(229, 231, 235, 0.75)";
+      ctx.fillRect(-w * 0.12, -ph / 2 - 14, w * 0.24, 28);
+      ctx.restore();
+
+      const mw = w * 0.75;
+      const my = h * 0.84;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.beginPath();
+      ctx.roundRect((w - mw) / 2, my, mw, h * 0.065, 30);
+      ctx.fill();
+
+      ctx.fillStyle = "#1e293b";
+      ctx.font = `bold ${Math.round(h * 0.016)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("♫  Golden Hours  •  Joji", w / 2, my + h * 0.038);
+    }
+  },
+
+  // 10. Instagram Commercial Sale (1080x1080)
   {
     id: "insta-sale-bold",
     nameAr: "عرض ترويجي لمتجر مع خصم كبير",

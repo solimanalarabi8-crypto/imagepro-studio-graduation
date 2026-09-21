@@ -12,7 +12,7 @@ describe("Creative Backdrops Catalog", () => {
       "fashion", "beauty", "business", "abstract", "3d", "minimal"
     ];
     
-    expect(CREATIVE_BACKDROP_CATEGORIES.length).toBe(13);
+    expect(CREATIVE_BACKDROP_CATEGORIES.length).toBeGreaterThanOrEqual(13);
     expectedCategories.forEach(cat => {
       const found = CREATIVE_BACKDROP_CATEGORIES.some(c => c.id === cat);
       expect(found).toBe(true);

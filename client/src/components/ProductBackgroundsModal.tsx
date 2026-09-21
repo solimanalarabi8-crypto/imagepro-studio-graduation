@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { PRODUCT_BACKGROUNDS, ProductBackgroundPreset, generateProductBackgroundUrl } from "@/lib/product-backgrounds";
-import { Sparkles, Layers, Check, Download, Image as ImageIcon, Wand2, Maximize2 } from "lucide-react";
+import { Sparkles, Check, X, SlidersHorizontal, Image as ImageIcon } from "lucide-react";
 
 interface ProductBackgroundsModalProps {
   isOpen: boolean;
@@ -15,6 +13,35 @@ interface ProductBackgroundsModalProps {
   currentCanvasWidth?: number;
   currentCanvasHeight?: number;
 }
+
+// High-DPR miniature canvas renderer
+const StudioCanvasThumb: React.FC<{
+  preset: ProductBackgroundPreset;
+  width: number;
+  height: number;
+}> = ({ preset, width, height }) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const tw = 320;
+    const th = Math.max(160, Math.round((tw / width) * height));
+    canvas.width = tw;
+    canvas.height = th;
+    ctx.clearRect(0, 0, tw, th);
+    preset.render(ctx, tw, th);
+  }, [preset, width, height]);
+
+  return (
+    <canvas
+      ref={ref}
+      className="w-full h-full object-contain pointer-events-none transition-transform duration-300 group-hover:scale-105"
+    />
+  );
+};
 
 export const ProductBackgroundsModal: React.FC<ProductBackgroundsModalProps> = ({
   isOpen,
@@ -29,66 +56,25 @@ export const ProductBackgroundsModal: React.FC<ProductBackgroundsModalProps> = (
   const [addShadow, setAddShadow] = useState<boolean>(true);
   const [shadowOpacity, setShadowOpacity] = useState<number>(45);
   const [applyAsLayer, setApplyAsLayer] = useState<boolean>(false);
-  const [previewThumbnails, setPreviewThumbnails] = useState<Record<string, string>>({});
-  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isAr = lang === "ar";
 
-  // Pre-render miniature thumbnails for all 8 presets
-  useEffect(() => {
-    const thumbs: Record<string, string> = {};
-    const thumbCanvas = document.createElement("canvas");
-    thumbCanvas.width = 320;
-    thumbCanvas.height = 180;
-    const ctx = thumbCanvas.getContext("2d");
+  const categories = useMemo(() => [
+    { id: "all", nameAr: "جميع الخلفيات", nameEn: "All" },
+    { id: "luxury", nameAr: "رخام فاخر", nameEn: "Luxury Marble" },
+    { id: "studio", nameAr: "استوديو تصوير", nameEn: "Studio Cyclorama" },
+    { id: "natural", nameAr: "طبيعة وخشب", nameEn: "Natural Wood" },
+    { id: "creative", nameAr: "إبداعي ونيون", nameEn: "Cyberpunk" },
+  ], []);
 
-    if (ctx) {
-      PRODUCT_BACKGROUNDS.forEach((preset) => {
-        ctx.clearRect(0, 0, 320, 180);
-        preset.render(ctx, 320, 180);
-        thumbs[preset.id] = thumbCanvas.toDataURL("image/jpeg", 0.85);
-      });
-      setPreviewThumbnails(thumbs);
-    }
-  }, []);
+  const filteredPresets = useMemo(() => {
+    if (activeCategory === "all") return PRODUCT_BACKGROUNDS;
+    return PRODUCT_BACKGROUNDS.filter((p) => p.category === activeCategory);
+  }, [activeCategory]);
 
-  // Update big interactive preview when preset or shadow changes
-  useEffect(() => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const preset = PRODUCT_BACKGROUNDS.find((p) => p.id === selectedPresetId) || PRODUCT_BACKGROUNDS[0];
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.clearRect(0, 0, w, h);
-    preset.render(ctx, w, h);
-
-    // Render mockup demonstration of a floating subject & contact shadow
-    if (addShadow) {
-      ctx.save();
-      const shadowY = h * 0.76;
-      const shadowW = w * 0.32;
-      const shadowH = h * 0.08;
-      const sGrad = ctx.createRadialGradient(w / 2, shadowY, 5, w / 2, shadowY, shadowW / 2);
-      sGrad.addColorStop(0, `rgba(15, 23, 42, ${shadowOpacity / 100})`);
-      sGrad.addColorStop(0.6, `rgba(15, 23, 42, ${(shadowOpacity / 100) * 0.4})`);
-      sGrad.addColorStop(1, "rgba(15, 23, 42, 0)");
-      ctx.fillStyle = sGrad;
-      ctx.beginPath();
-      ctx.ellipse(w / 2, shadowY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }, [selectedPresetId, addShadow, shadowOpacity]);
-
-  const filteredPresets = activeCategory === "all"
-    ? PRODUCT_BACKGROUNDS
-    : PRODUCT_BACKGROUNDS.filter((p) => p.category === activeCategory);
-
-  const selectedPreset = PRODUCT_BACKGROUNDS.find((p) => p.id === selectedPresetId) || PRODUCT_BACKGROUNDS[0];
+  const selectedPreset = useMemo(() => {
+    return PRODUCT_BACKGROUNDS.find((p) => p.id === selectedPresetId) || PRODUCT_BACKGROUNDS[0];
+  }, [selectedPresetId]);
 
   const handleApply = () => {
     const targetW = currentCanvasWidth || 1920;
@@ -105,200 +91,150 @@ export const ProductBackgroundsModal: React.FC<ProductBackgroundsModalProps> = (
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 text-white shadow-2xl p-0"
+        className="sm:max-w-5xl w-[94vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#0b101b] border border-slate-800 text-slate-100 shadow-2xl p-0 gap-0 rounded-2xl"
         dir={isAr ? "rtl" : "ltr"}
       >
-        <DialogHeader className="px-6 py-4 border-b border-slate-850 bg-slate-900/70 flex flex-row items-center justify-between">
+        {/* Header matching Image 4 */}
+        <DialogHeader className="px-6 py-4 border-b border-slate-800/80 bg-[#0e1524] flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center shadow-lg shadow-amber-500/20 text-white">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center shadow-lg shadow-amber-500/20 text-white font-bold">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold flex items-center gap-2">
-                {isAr ? "مكتبة خلفيات المنتجات الاحترافية" : "Product Showcase Backgrounds Studio"}
+              <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+                <span>{isAr ? "مكتبة خلفيات المنتجات الاحترافية" : "Product Studio Backdrops"}</span>
                 <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
-                  {isAr ? "8 بيئات تصوير استوديو" : "8 Studio Presets"}
+                  {isAr ? "8 بيئات تصوير استوديو" : "8 Studio Environments"}
                 </Badge>
               </DialogTitle>
               <p className="text-xs text-slate-400 mt-0.5">
                 {isAr
-                  ? "خلفيات إجرائية فائقة الدقة (Procedural 4K) تبرز المنتجات وتضيف ظلالاً واقعية تلقائياً"
-                  : "High-definition procedural backdrops tailored for commercial product presentation"}
+                  ? "خلفيات إجرائية فائقة الدقة (Procedural 4K) تبرز المنتجات مع ظلال تلامس واقعية (Contact Shadow)"
+                  : "Photorealistic procedural backdrops with smart contact shadow for product presentation"}
               </p>
             </div>
           </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+            <X className="w-4 h-4" />
+          </button>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-0">
-          {/* Preset Selector Grid */}
-          <div className="lg:col-span-7 p-4 overflow-y-auto border-b lg:border-b-0 lg:border-l border-slate-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
-                <TabsList className="grid grid-cols-4 bg-slate-800/80 p-1 rounded-lg">
-                  <TabsTrigger value="all" className="text-xs data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-                    {isAr ? "الكل" : "All"}
-                  </TabsTrigger>
-                  <TabsTrigger value="luxury" className="text-xs data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-                    {isAr ? "فاخر" : "Luxury"}
-                  </TabsTrigger>
-                  <TabsTrigger value="studio" className="text-xs data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-                    {isAr ? "استوديو" : "Studio"}
-                  </TabsTrigger>
-                  <TabsTrigger value="creative" className="text-xs data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-                    {isAr ? "إبداعي" : "Creative"}
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+        {/* Top Category Filter Pills */}
+        <div className="px-6 py-2.5 border-b border-slate-800/60 bg-[#0d1322]/50 flex items-center gap-2 overflow-x-auto scrollbar-none">
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActiveCategory(c.id)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                activeCategory === c.id
+                  ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
+                  : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+              }`}
+            >
+              {isAr ? c.nameAr : c.nameEn}
+            </button>
+          ))}
+        </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {filteredPresets.map((preset) => {
-                const isSelected = preset.id === selectedPresetId;
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => setSelectedPresetId(preset.id)}
-                    className={`group relative text-start rounded-xl overflow-hidden border transition-all duration-200 flex flex-col ${
-                      isSelected
-                        ? "border-amber-400 ring-2 ring-amber-400/30 shadow-lg shadow-amber-500/10 scale-[1.01]"
-                        : "border-slate-800 hover:border-slate-600 bg-slate-800/40 hover:bg-slate-800/70"
-                    }`}
-                  >
-                    <div className="w-full aspect-video bg-slate-950 relative overflow-hidden">
-                      {previewThumbnails[preset.id] ? (
-                        <img
-                          src={previewThumbnails[preset.id]}
-                          alt={preset.nameEn}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
-                          {isAr ? "جار التحميل..." : "Rendering..."}
-                        </div>
-                      )}
-                      {isSelected && (
-                        <div className="absolute top-2 right-2 bg-amber-500 text-white rounded-full p-1 shadow-md">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2.5 bg-slate-900/90 flex-1 flex flex-col justify-between">
-                      <div className="text-xs font-semibold text-slate-200 line-clamp-1">
-                        {isAr ? preset.nameAr : preset.nameEn}
+        {/* Full-width 4-column Grid (NO VERTICAL SCROLLBAR SPLIT) */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {filteredPresets.map((preset) => {
+              const isSelected = preset.id === selectedPresetId;
+              return (
+                <div
+                  key={preset.id}
+                  onClick={() => setSelectedPresetId(preset.id)}
+                  className={`group relative flex flex-col rounded-xl overflow-hidden cursor-pointer border transition-all duration-200 ${
+                    isSelected
+                      ? "bg-[#17223b] border-blue-500 ring-2 ring-blue-500/30 shadow-lg shadow-blue-500/15 scale-[1.02]"
+                      : "bg-[#131b2e] hover:bg-[#17223b] border-slate-700/60 hover:border-blue-500/50"
+                  }`}
+                >
+                  <div className="aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden relative">
+                    <StudioCanvasThumb preset={preset} width={1600} height={900} />
+                    {isSelected && (
+                      <div className="absolute top-2 left-2 bg-[#2563eb] text-white rounded-full p-1 shadow-md">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
                       </div>
-                      <div className="text-[10px] text-slate-400 capitalize mt-0.5">
-                        {preset.category}
-                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                      {isAr ? preset.nameAr : preset.nameEn}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Side: Interactive Preview & Options */}
-          <div className="lg:col-span-5 p-4 flex flex-col justify-between space-y-4 bg-slate-900/50">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-300">
-                  {isAr ? "المعاينة التفاعلية والظلال" : "Interactive Live Preview"}
-                </span>
-                <span className="text-[11px] text-amber-400 font-medium">
-                  {isAr ? selectedPreset.nameAr : selectedPreset.nameEn}
-                </span>
-              </div>
-
-              {/* Big Canvas Preview */}
-              <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner flex items-center justify-center aspect-video">
-                <canvas
-                  ref={previewCanvasRef}
-                  width={640}
-                  height={360}
-                  className="w-full h-full object-contain"
-                />
-                <div className="absolute bottom-2 left-2 text-[10px] bg-black/60 px-2 py-0.5 rounded text-slate-300 backdrop-blur-sm pointer-events-none">
-                  {currentCanvasWidth} × {currentCanvasHeight} px
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                      <span className="capitalize">{preset.category}</span>
+                      <span className="font-mono">4K Studio</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        </div>
 
-            {/* Smart Shadow & Application Options */}
-            <div className="space-y-3.5 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-slate-200 flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={addShadow}
-                    onChange={(e) => setAddShadow(e.target.checked)}
-                    className="rounded border-slate-600 text-amber-500 focus:ring-amber-500 bg-slate-700 w-4 h-4"
-                  />
-                  <span>{isAr ? "إضافة ظل أرضي ذكي (Ground Shadow)" : "Generate Smart Ground Shadow"}</span>
-                </label>
-                <Badge variant="outline" className="text-[10px] bg-slate-700 text-slate-300 border-none">
-                  {addShadow ? `${shadowOpacity}%` : isAr ? "معطل" : "Off"}
-                </Badge>
-              </div>
+        {/* Bottom Control Bar with Contact Shadow Slider & Apply Button */}
+        <div className="px-6 py-4 border-t border-slate-800/80 bg-[#0e1524] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-6 text-xs text-slate-300">
+            {/* Contact Shadow Toggle & Slider */}
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={addShadow}
+                  onChange={(e) => setAddShadow(e.target.checked)}
+                  className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 accent-[#2563eb]"
+                />
+                <span className="font-semibold">{isAr ? "إضافة ظل أرضي ذكي (Contact Shadow)" : "Smart Contact Shadow"}</span>
+              </label>
 
               {addShadow && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-[11px] text-slate-400">
-                    <span>{isAr ? "كثافة وقوة الظل" : "Shadow Intensity"}</span>
-                    <span>{shadowOpacity}%</span>
-                  </div>
+                <div className="flex items-center gap-2 min-w-[130px]">
                   <Slider
                     value={[shadowOpacity]}
-                    min={10}
-                    max={90}
-                    step={1}
                     onValueChange={(val) => setShadowOpacity(val[0])}
-                    className="w-full"
+                    min={10}
+                    max={100}
+                    step={5}
+                    className="w-24"
                   />
+                  <span className="font-mono text-[11px] text-blue-400">{shadowOpacity}%</span>
                 </div>
               )}
-
-              <div className="pt-2 border-t border-slate-700/60">
-                <label className="text-xs font-medium text-slate-200 flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={applyAsLayer}
-                    onChange={(e) => setApplyAsLayer(e.target.checked)}
-                    className="rounded border-slate-600 text-amber-500 focus:ring-amber-500 bg-slate-700 w-4 h-4"
-                  />
-                  <span>
-                    {isAr
-                      ? "إضافة كطبقة خلفية مستقلة (Layer)"
-                      : "Add as a separate background layer"}
-                  </span>
-                </label>
-                <p className="text-[10px] text-slate-400 mt-1 mr-6">
-                  {isAr
-                    ? "إذا لم يتم التحديد، سيتم وضع الخلفية تحت الصورة المفرغة الحالية مباشرة"
-                    : "If unchecked, replaces canvas background preserving cutout subject"}
-                </p>
-              </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 text-xs h-9"
-              >
-                {isAr ? "إلغاء" : "Cancel"}
-              </Button>
-              <Button
-                onClick={handleApply}
-                className="flex-[2] bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium text-xs h-9 shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                <span>{isAr ? "تطبيق البيئة على التصميم" : "Apply to Canvas"}</span>
-              </Button>
-            </div>
+            {/* As Layer Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyAsLayer}
+                onChange={(e) => setApplyAsLayer(e.target.checked)}
+                className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 accent-[#2563eb]"
+              />
+              <span>{isAr ? "إدراج كطبقة منفصلة (Layer)" : "Insert as Layer"}</span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex-1 sm:flex-none"
+            >
+              {isAr ? "إلغاء" : "Cancel"}
+            </button>
+            <button
+              onClick={handleApply}
+              className="px-6 py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 flex-1 sm:flex-none"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" />
+              <span>{isAr ? "تطبيق البيئة على التصميم" : "Apply to Canvas"}</span>
+            </button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 };
+
 export default ProductBackgroundsModal;

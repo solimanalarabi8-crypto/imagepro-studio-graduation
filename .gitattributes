@@ -1,0 +1,7 @@
+# Prevent Git on Windows from converting line endings in binary files without extensions
+client/public/imgly-data/* binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.onnx binary

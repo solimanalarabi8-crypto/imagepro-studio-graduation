@@ -1,20 +1,19 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DESIGN_TEMPLATES, DesignTemplatePreset } from "@/lib/templates";
 import {
-  Sparkles,
+  EDITABLE_TEMPLATES,
+  EditableTemplate
+} from "@/lib/editable-templates";
+import {
+  CREATIVE_BACKDROPS,
+  CreativeBackdropPreset
+} from "@/lib/creative-backgrounds";
+import { PRODUCT_BACKGROUNDS, ProductBackgroundPreset } from "@/lib/product-backgrounds";
+import {
   Search,
-  Maximize2,
   Lock,
   Unlock,
-  Layers,
-  ArrowRight,
-  Check,
-  LayoutGrid,
-  FileSpreadsheet,
-  Palette,
-  X,
-  Plus
+  FolderOpen
 } from "lucide-react";
 
 interface NewDesignModalProps {
@@ -26,113 +25,322 @@ interface NewDesignModalProps {
     background: "transparent" | "white" | "black" | string;
     templateName?: string;
   }) => void;
+  onApplyTemplate?: (template: EditableTemplate) => void;
+  onApplyBackground?: (preset: CreativeBackdropPreset | ProductBackgroundPreset) => void;
   onOpenTemplates?: () => void;
   lang?: "ar" | "en";
 }
+
+// Live Canvas Thumbnail component for Canva-grade rendering
+const CanvasLiveThumb: React.FC<{
+  renderFn: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+  width: number;
+  height: number;
+}> = ({ renderFn, width, height }) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const tw = 320;
+    const th = Math.max(120, Math.round((tw / width) * height));
+    canvas.width = tw;
+    canvas.height = th;
+    ctx.clearRect(0, 0, tw, th);
+    renderFn(ctx, tw, th);
+  }, [renderFn, width, height]);
+
+  return (
+    <div className="relative w-full overflow-hidden flex items-center justify-center bg-slate-950/80 rounded-xl aspect-video max-h-[140px]">
+      <canvas
+        ref={ref}
+        className="w-full h-full object-contain pointer-events-none transition-transform duration-300 group-hover:scale-105"
+      />
+    </div>
+  );
+};
 
 export const NewDesignModal: React.FC<NewDesignModalProps> = ({
   isOpen,
   onClose,
   onCreateNewProject,
+  onApplyTemplate,
+  onApplyBackground,
   onOpenTemplates,
   lang = "ar"
 }) => {
   const isAr = lang === "ar";
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedPresetId, setSelectedPresetId] = useState<string>("insta-square");
+
+  // Active Tab in New Design:
+  // "presets" = The 8 Standard Cards from Image 4 Panel 3
+  // "templates" = Canva Live Templates catalog
+  // "backdrops" = Live Studio Backdrops catalog
+  // "custom" = Custom Dimension Width/Height inputs
+  const [activeTab, setActiveTab] = useState<"presets" | "templates" | "backdrops" | "custom">("presets");
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTemplateCat, setSelectedTemplateCat] = useState("all");
+  const [selectedBackdropCat, setSelectedBackdropCat] = useState("all");
 
   // Custom dimensions state
   const [customWidth, setCustomWidth] = useState<number>(1080);
   const [customHeight, setCustomHeight] = useState<number>(1080);
   const [lockRatio, setLockRatio] = useState<boolean>(true);
   const [aspectRatioValue, setAspectRatioValue] = useState<number>(1);
-  const [dimensionUnit, setDimensionUnit] = useState<"px" | "cm" | "in">("px");
-  const [bgChoice, setBgChoice] = useState<"transparent" | "white" | "black" | "#0f172a">("transparent");
+  const [bgChoice, setBgChoice] = useState<"white" | "transparent" | "black">("white");
 
-  const categories = useMemo(() => [
-    { id: "all", nameAr: "الجميع", nameEn: "All Presets", icon: "✨" },
-    { id: "social", nameAr: "سوشيال ميديا", nameEn: "Social Media", icon: "📱" },
-    { id: "presentations", nameAr: "عروض تقديمية", nameEn: "Presentations", icon: "📊" },
-    { id: "marketing", nameAr: "تسويق وإعلانات", nameEn: "Marketing & Ads", icon: "🚀" },
-    { id: "print", nameAr: "مطبوعات ووثائق", nameEn: "Print & Docs", icon: "📄" },
-    { id: "ecommerce", nameAr: "تجارة ومتاجر", nameEn: "E-Commerce", icon: "🛍️" },
-    { id: "custom", nameAr: "أبعاد مخصصة", nameEn: "Custom Size", icon: "📐" },
+  // Project file input ref for "فتح مشروع موجود"
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 8 Standard Preset Cards matching Image 4 Panel 3 ("قائمة تصميم جديد")
+  const standardPresets = useMemo(() => [
+    {
+      id: "instagram-post",
+      nameAr: "Instagram Post",
+      nameEn: "Instagram Post",
+      width: 1080,
+      height: 1080,
+      dimensions: "1080 × 1080",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#f09433] via-[#e6683c] to-[#bc1888] flex items-center justify-center text-white shadow-lg shadow-pink-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "instagram-story",
+      nameAr: "Instagram Story",
+      nameEn: "Instagram Story",
+      width: 1080,
+      height: 1920,
+      dimensions: "1080 × 1920",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#833ab4] via-[#fd1d1d] to-[#fcb045] flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="3" />
+            <path d="M12 18h.01" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "youtube-thumbnail",
+      nameAr: "Youtube Thumbnail",
+      nameEn: "YouTube Thumbnail",
+      width: 1280,
+      height: 720,
+      dimensions: "1280 × 720",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#ff0000] to-[#cc0000] flex items-center justify-center text-white shadow-lg shadow-red-500/20">
+          <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "facebook-post",
+      nameAr: "Facebook Post",
+      nameEn: "Facebook Post",
+      width: 1200,
+      height: 630,
+      dimensions: "1200 × 630",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#1877f2] to-[#0d65d9] flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+          <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "presentation",
+      nameAr: "عرض تقديمي",
+      nameEn: "Presentation",
+      width: 1920,
+      height: 1080,
+      dimensions: "1920 × 1080",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#06b6d4] via-[#3b82f6] to-[#8b5cf6] flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "business-card",
+      nameAr: "بطاقة عمل",
+      nameEn: "Business Card",
+      width: 1050,
+      height: 600,
+      dimensions: "85 × 55",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#3b82f6] to-[#1d4ed8] flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <line x1="6" y1="9" x2="10" y2="9" />
+            <line x1="6" y1="13" x2="14" y2="13" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "resume-cv",
+      nameAr: "سيرة ذاتية",
+      nameEn: "Resume / CV",
+      width: 1240,
+      height: 1754,
+      dimensions: "A4",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#0d9488] to-[#06b6d4] flex items-center justify-center text-white shadow-lg shadow-teal-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <line x1="10" y1="9" x2="8" y2="9" />
+          </svg>
+        </div>
+      )
+    },
+    {
+      id: "custom-dimensions",
+      nameAr: "تصميم مخصص",
+      nameEn: "Custom Size",
+      width: 1080,
+      height: 1080,
+      dimensions: "أبعاد مخصصة",
+      bg: "white",
+      icon: (
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#a855f7] to-[#6366f1] flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+            <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+          </svg>
+        </div>
+      )
+    }
   ], []);
 
-  const filteredPresets = useMemo(() => {
-    let list = DESIGN_TEMPLATES;
-    if (selectedCategory !== "all" && selectedCategory !== "custom") {
-      list = list.filter((p) => p.category === selectedCategory);
+  // Filtered Templates for tab 2
+  const filteredTemplates = useMemo(() => {
+    let list = EDITABLE_TEMPLATES;
+    if (selectedTemplateCat !== "all") {
+      list = list.filter((t) => t.category === selectedTemplateCat);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
-        (p) =>
-          p.nameAr.toLowerCase().includes(q) ||
-          p.nameEn.toLowerCase().includes(q) ||
-          p.descriptionAr.toLowerCase().includes(q) ||
-          p.descriptionEn.toLowerCase().includes(q) ||
-          `${p.width}x${p.height}`.includes(q)
+        (t) =>
+          t.nameAr.toLowerCase().includes(q) ||
+          t.nameEn.toLowerCase().includes(q) ||
+          t.tags.some((tag) => tag.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [selectedCategory, searchQuery]);
+  }, [selectedTemplateCat, searchQuery]);
 
-  const selectedPreset = useMemo(() => {
-    return DESIGN_TEMPLATES.find((p) => p.id === selectedPresetId) || DESIGN_TEMPLATES[0];
-  }, [selectedPresetId]);
+  // Merged Backdrops list (Product + Creative Backdrops)
+  const allBackdrops = useMemo(() => {
+    const pBgs: CreativeBackdropPreset[] = PRODUCT_BACKGROUNDS.map((p) => ({
+      id: p.id,
+      nameAr: p.nameAr,
+      nameEn: p.nameEn,
+      category: p.category as any,
+      tags: ["product", "studio", p.id],
+      accentColor: p.accentColor,
+      render: p.render
+    }));
+    return [...pBgs, ...CREATIVE_BACKDROPS];
+  }, []);
 
-  const handleSelectPreset = (p: DesignTemplatePreset) => {
-    setSelectedPresetId(p.id);
-    setCustomWidth(p.width);
-    setCustomHeight(p.height);
-    setAspectRatioValue(p.width / p.height);
-  };
-
-  const handleWidthChange = (val: number) => {
-    const w = Math.max(10, Math.min(10000, val || 10));
-    setCustomWidth(w);
-    if (lockRatio && aspectRatioValue > 0) {
-      setCustomHeight(Math.round(w / aspectRatioValue));
+  const filteredBackdrops = useMemo(() => {
+    let list = allBackdrops;
+    if (selectedBackdropCat !== "all") {
+      list = list.filter((b) => b.category === selectedBackdropCat);
     }
-  };
-
-  const handleHeightChange = (val: number) => {
-    const h = Math.max(10, Math.min(10000, val || 10));
-    setCustomHeight(h);
-    if (lockRatio && aspectRatioValue > 0) {
-      setCustomWidth(Math.round(h * aspectRatioValue));
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (b) =>
+          b.nameAr.toLowerCase().includes(q) ||
+          b.nameEn.toLowerCase().includes(q) ||
+          b.tags.some((tag) => tag.toLowerCase().includes(q))
+      );
     }
-  };
+    return list;
+  }, [allBackdrops, selectedBackdropCat, searchQuery]);
 
-  const handleCreatePresetProject = () => {
+  const handleSelectPreset = (preset: typeof standardPresets[0]) => {
+    if (preset.id === "custom-dimensions") {
+      setActiveTab("custom");
+      return;
+    }
     onCreateNewProject({
-      width: selectedPreset.width,
-      height: selectedPreset.height,
-      background: bgChoice,
-      templateName: isAr ? selectedPreset.nameAr : selectedPreset.nameEn,
+      width: preset.width,
+      height: preset.height,
+      background: preset.bg,
+      templateName: isAr ? preset.nameAr : preset.nameEn
     });
     onClose();
   };
 
-  const handleCreateCustomProject = () => {
-    // Convert cm/in to px if needed (standard 96 DPI screen or 300 DPI print)
-    let finalW = customWidth;
-    let finalH = customHeight;
-    if (dimensionUnit === "cm") {
-      finalW = Math.round(customWidth * 37.795);
-      finalH = Math.round(customHeight * 37.795);
-    } else if (dimensionUnit === "in") {
-      finalW = Math.round(customWidth * 96);
-      finalH = Math.round(customHeight * 96);
+  const handleApplyTemplateDirect = (tpl: EditableTemplate) => {
+    if (onApplyTemplate) {
+      onApplyTemplate(tpl);
+    } else {
+      onCreateNewProject({
+        width: tpl.width,
+        height: tpl.height,
+        background: "white",
+        templateName: isAr ? tpl.nameAr : tpl.nameEn
+      });
     }
+    onClose();
+  };
 
+  const handleApplyBackdropDirect = (bg: CreativeBackdropPreset) => {
+    if (onApplyBackground) {
+      onApplyBackground(bg);
+    } else {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1920;
+      canvas.height = 1080;
+      const ctx = canvas.getContext("2d");
+      if (ctx) bg.render(ctx, 1920, 1080);
+      onCreateNewProject({
+        width: 1920,
+        height: 1080,
+        background: canvas.toDataURL("image/png"),
+        templateName: isAr ? bg.nameAr : bg.nameEn
+      });
+    }
+    onClose();
+  };
+
+  const handleCreateCustom = () => {
     onCreateNewProject({
-      width: Math.max(100, Math.min(8000, finalW)),
-      height: Math.max(100, Math.min(8000, finalH)),
+      width: Math.max(100, Math.min(8000, customWidth)),
+      height: Math.max(100, Math.min(8000, customHeight)),
       background: bgChoice,
-      templateName: isAr ? `تصميم مخصص (${finalW}×${finalH})` : `Custom Design (${finalW}×${finalH})`,
+      templateName: isAr ? `تصميم مخصص (${customWidth}×${customHeight})` : `Custom Design (${customWidth}×${customHeight})`,
     });
     onClose();
   };
@@ -140,348 +348,355 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col bg-slate-950/95 backdrop-blur-2xl border border-slate-800 text-slate-100 shadow-2xl p-0 rounded-2xl"
+        className="sm:max-w-4xl w-[94vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#0b101b] border border-slate-800/90 text-slate-100 shadow-2xl p-0 gap-0 rounded-2xl"
         dir={isAr ? "rtl" : "ltr"}
       >
-        {/* Header with gradient branding */}
-        <DialogHeader className="px-6 py-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-teal-400 flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-cyan-500/20">
-              <Plus className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-100">
-                {isAr ? "إنشاء تصميم جديد" : "Create New Design"}
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-                  {isAr ? "جميع المقاسات والمنصات" : "All Formats"}
-                </span>
-              </DialogTitle>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isAr
-                  ? "اختر مقاساً قياسياً لمنصات التواصل، العروض، المطبوعات أو ابدأ بأبعاد مخصصة"
-                  : "Choose a standard format for social, presentations, print, or custom dimensions"}
-              </p>
-            </div>
+        {/* Header - Matching Image 4 Panel 3 */}
+        <DialogHeader className="px-6 py-4 border-b border-slate-800/80 bg-[#0e1524] flex flex-row items-center justify-between">
+          <div>
+            <DialogTitle className="text-xl font-bold text-white tracking-wide flex items-center gap-2">
+              <span>{isAr ? "تصميم جديد" : "New Design"}</span>
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              {isAr ? "اختر نوع التصميم الذي تريده" : "Choose the design format you want"}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Quick Template Library trigger */}
-            {onOpenTemplates && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenTemplates();
-                }}
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isAr ? "استعراض القوالب الجاهزة" : "Browse Templates"}</span>
-              </button>
-            )}
+          {/* Clean Tab Pill Switcher */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#131b2e] border border-slate-700/60">
+            <button
+              onClick={() => setActiveTab("presets")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "presets"
+                  ? "bg-[#2563eb] text-white shadow-md font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {isAr ? "المقاسات الجاهزة" : "Presets"}
+            </button>
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "templates"
+                  ? "bg-[#2563eb] text-white shadow-md font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {isAr ? "قوالب كانفا" : "Templates"}
+            </button>
+            <button
+              onClick={() => setActiveTab("backdrops")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "backdrops"
+                  ? "bg-[#2563eb] text-white shadow-md font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {isAr ? "استوديو الخلفيات" : "Backdrops"}
+            </button>
+            <button
+              onClick={() => setActiveTab("custom")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "custom"
+                  ? "bg-[#2563eb] text-white shadow-md font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {isAr ? "أبعاد مخصصة" : "Custom"}
+            </button>
           </div>
         </DialogHeader>
 
-        {/* Search & Category Pills */}
-        <div className="px-6 py-3 border-b border-slate-800/60 bg-slate-900/40 flex flex-col sm:flex-row gap-3 items-center justify-between">
-          {/* Search bar */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder={isAr ? "ابحث عن مقاس (مثل: Instagram, A4, غلاف)..." : "Search format (e.g., Instagram, A4)..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl ps-9 pe-4 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500 transition"
-            />
-          </div>
-
-          {/* Category tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
-                  selectedCategory === cat.id
-                    ? "bg-cyan-500 text-slate-950 font-semibold shadow-md shadow-cyan-500/20"
-                    : "bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800"
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{isAr ? cat.nameAr : cat.nameEn}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Modal Main Content */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left / Center 2 Columns: Preset Cards Grid */}
-          <div className="md:col-span-2 space-y-4">
-            {selectedCategory === "custom" ? (
-              /* Custom Dimensions Workspace */
-              <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-5 space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                  <h4 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                    <Maximize2 className="w-4 h-4 text-cyan-400" />
-                    <span>{isAr ? "تعيين أبعاد مخصصة للكانفاس" : "Custom Canvas Dimensions"}</span>
-                  </h4>
-                  <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/60">
-                    {(["px", "cm", "in"] as const).map((unit) => (
-                      <button
-                        key={unit}
-                        type="button"
-                        onClick={() => setDimensionUnit(unit)}
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                          dimensionUnit === unit ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        {unit}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 items-center">
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1.5 font-medium">
-                      {isAr ? "العرض (Width)" : "Width"} ({dimensionUnit})
-                    </label>
-                    <input
-                      type="number"
-                      value={customWidth}
-                      onChange={(e) => handleWidthChange(Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1.5 font-medium">
-                      {isAr ? "الارتفاع (Height)" : "Height"} ({dimensionUnit})
-                    </label>
-                    <input
-                      type="number"
-                      value={customHeight}
-                      onChange={(e) => handleHeightChange(Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Aspect ratio lock */}
-                <div className="flex items-center justify-between bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setLockRatio(!lockRatio)}
-                      className={`p-1.5 rounded-lg border transition ${
-                        lockRatio
-                          ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
-                          : "bg-slate-800 border-slate-700 text-slate-400"
-                      }`}
-                      title={isAr ? "قفل نسبة العرض إلى الارتفاع" : "Lock Aspect Ratio"}
-                    >
-                      {lockRatio ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                    </button>
-                    <span className="text-xs text-slate-300">
-                      {isAr ? "قفل نسبة الأبعاد (Aspect Ratio)" : "Maintain Aspect Ratio"}
+        {/* Content Section */}
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+          {/* ── TAB 1: 8 Standard Presets Cards (Exactly Image 4 Panel 3) ── */}
+          {activeTab === "presets" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {standardPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => handleSelectPreset(preset)}
+                    className="group flex flex-col items-center justify-center p-5 rounded-2xl bg-[#131b2e] hover:bg-[#18233c] border border-slate-700/60 hover:border-blue-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10 text-center cursor-pointer"
+                  >
+                    <div className="mb-3 group-hover:scale-110 transition-transform duration-200">
+                      {preset.icon}
+                    </div>
+                    <span className="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors whitespace-nowrap">
+                      {isAr ? preset.nameAr : preset.nameEn}
                     </span>
-                  </div>
-                  <span className="text-xs font-mono text-cyan-400 font-bold">
-                    {(customWidth / Math.max(1, customHeight)).toFixed(2)} : 1
-                  </span>
-                </div>
+                    <span className="text-[11px] text-slate-400 mt-1 font-mono tracking-wide">
+                      {preset.dimensions}
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-                {/* Background color choice */}
-                <div>
-                  <label className="text-xs text-slate-400 block mb-2 font-medium">
-                    {isAr ? "لون خلفية الكانفاس الأولية" : "Initial Canvas Background"}
-                  </label>
-                  <div className="flex items-center gap-2.5">
-                    {[
-                      { id: "transparent", label: isAr ? "شفاف" : "Transparent", bg: "repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) 50% / 10px 10px" },
-                      { id: "white", label: isAr ? "أبيض" : "White", bg: "#ffffff" },
-                      { id: "black", label: isAr ? "أسود" : "Black", bg: "#000000" },
-                      { id: "#0f172a", label: isAr ? "استوديو كحلي" : "Studio Navy", bg: "#0f172a" },
-                    ].map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setBgChoice(b.id as any)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
-                          bgChoice === b.id
-                            ? "border-cyan-500 bg-cyan-500/10 text-cyan-300 shadow-sm"
-                            : "border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        <span
-                          className="w-4 h-4 rounded-full border border-slate-600 inline-block shrink-0"
-                          style={{ background: b.bg }}
-                        />
-                        <span>{b.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Create Custom Button */}
+              {/* Bottom Action: "فتح مشروع موجود" with folder icon - exactly Image 4 Panel 3 */}
+              <div className="pt-2">
                 <button
                   type="button"
-                  onClick={handleCreateCustomProject}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 text-slate-950 font-bold text-sm hover:brightness-110 active:scale-[0.99] transition shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#131b2e] hover:bg-[#19243d] text-slate-200 border border-slate-700/60 hover:border-blue-500/80 flex items-center justify-center gap-2.5 font-bold text-sm transition-all duration-200 shadow-md group cursor-pointer"
                 >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>{isAr ? "بدء التصميم المخصص الآن" : "Start Custom Canvas Now"}</span>
+                  <FolderOpen className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <span>{isAr ? "فتح مشروع موجود" : "Open Existing Project"}</span>
                 </button>
-              </div>
-            ) : (
-              /* Presets Grid */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[480px] overflow-y-auto pe-1">
-                {filteredPresets.map((p) => {
-                  const isSelected = p.id === selectedPresetId;
-                  const ratio = p.width / p.height;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => handleSelectPreset(p)}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
-                        isSelected
-                          ? "bg-cyan-500/10 border-cyan-500 text-slate-100 shadow-md shadow-cyan-500/10"
-                          : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700 text-slate-300 hover:bg-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl p-2 rounded-lg bg-slate-800/80 border border-slate-700/60">
-                            {p.icon}
-                          </span>
-                          <div>
-                            <h5 className="text-xs font-bold text-slate-100 leading-snug">
-                              {isAr ? p.nameAr : p.nameEn}
-                            </h5>
-                            <span className="text-[11px] text-cyan-400 font-mono font-semibold">
-                              {p.width} × {p.height} px
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Aspect visual pill */}
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/50">
-                          {p.aspect}
-                        </span>
-                      </div>
-
-                      <p className="text-[11px] text-slate-400 mt-2.5 line-clamp-2 leading-relaxed">
-                        {isAr ? p.descriptionAr : p.descriptionEn}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Active Preset Preview & Launch Pad */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="border-b border-slate-800/80 pb-3">
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
-                  {isAr ? "معاينة القياس المحدد" : "Selected Format"}
-                </span>
-                <h4 className="text-base font-bold text-slate-100">
-                  {isAr ? selectedPreset.nameAr : selectedPreset.nameEn}
-                </h4>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs font-mono text-cyan-400 font-bold">
-                    {selectedPreset.width} × {selectedPreset.height} px
-                  </span>
-                  <span className="text-slate-500">•</span>
-                  <span className="text-xs text-slate-400 font-medium">
-                    {selectedPreset.aspect}
-                  </span>
-                </div>
-              </div>
-
-              {/* Proportional aspect box simulation */}
-              <div className="h-44 bg-slate-950/80 rounded-xl border border-slate-800/80 flex items-center justify-center p-4">
-                <div
-                  className="rounded-lg border-2 border-dashed border-cyan-400/60 bg-gradient-to-tr from-cyan-500/10 to-teal-500/10 flex flex-col items-center justify-center shadow-inner transition-all duration-300"
-                  style={{
-                    width: selectedPreset.width >= selectedPreset.height ? "100%" : `${Math.round((selectedPreset.width / selectedPreset.height) * 100)}%`,
-                    height: selectedPreset.height > selectedPreset.width ? "100%" : `${Math.round((selectedPreset.height / selectedPreset.width) * 100)}%`,
-                    maxHeight: "140px",
-                    maxWidth: "200px"
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".imagepro,application/json,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        onCreateNewProject({
+                          width: 1920,
+                          height: 1080,
+                          background: reader.result as string,
+                          templateName: file.name.replace(/\.[^/.]+$/, "")
+                        });
+                        onClose();
+                      };
+                      reader.readAsDataURL(file);
+                    }
                   }}
-                >
-                  <span className="text-lg">{selectedPreset.icon}</span>
-                  <span className="text-[10px] font-mono text-cyan-300 font-bold mt-1">
-                    {selectedPreset.aspect}
-                  </span>
-                </div>
-              </div>
-
-              {/* Background Color selector for preset */}
-              <div>
-                <label className="text-xs text-slate-400 block mb-1.5 font-medium">
-                  {isAr ? "لون الكانفاس" : "Canvas Background"}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBgChoice("transparent")}
-                    className={`text-xs py-1.5 px-2 rounded-lg border font-medium transition ${
-                      bgChoice === "transparent"
-                        ? "bg-cyan-500/10 border-cyan-500 text-cyan-300"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {isAr ? "شفاف" : "Transparent"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBgChoice("white")}
-                    className={`text-xs py-1.5 px-2 rounded-lg border font-medium transition ${
-                      bgChoice === "white"
-                        ? "bg-cyan-500/10 border-cyan-500 text-cyan-300"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {isAr ? "أبيض نقي" : "Pure White"}
-                  </button>
-                </div>
+                />
               </div>
             </div>
+          )}
 
-            {/* Launch Actions */}
-            <div className="space-y-2 mt-4 pt-4 border-t border-slate-800/80">
-              <button
-                type="button"
-                onClick={handleCreatePresetProject}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 text-slate-950 font-bold text-xs hover:brightness-110 active:scale-[0.99] transition shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-1.5"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>{isAr ? "إنشاء تصميم فارغ بهذا المقاس" : "Create Blank Canvas"}</span>
-              </button>
+          {/* ── TAB 2: Canva Live Templates (Image 4 Panel 4) ── */}
+          {activeTab === "templates" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1">
+                  {[
+                    { id: "all", nameAr: "الكل", nameEn: "All" },
+                    { id: "social", nameAr: "سوشيال ميديا", nameEn: "Social Media" },
+                    { id: "business", nameAr: "أعمال", nameEn: "Business" },
+                    { id: "marketing", nameAr: "تسويق", nameEn: "Marketing" },
+                    { id: "education", nameAr: "تعليم وشهادات", nameEn: "Education" },
+                    { id: "posters", nameAr: "ملصقات وفن", nameEn: "Posters" },
+                    { id: "invitations", nameAr: "دعوات ومناسبات", nameEn: "Invitations" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedTemplateCat(cat.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                        selectedTemplateCat === cat.id
+                          ? "bg-[#2563eb] text-white shadow-md font-bold"
+                          : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                      }`}
+                    >
+                      {isAr ? cat.nameAr : cat.nameEn}
+                    </button>
+                  ))}
+                </div>
 
-              {onOpenTemplates && (
+                <div className="relative w-64">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={isAr ? "ابحث في القوالب..." : "Search templates..."}
+                    className="w-full h-8.5 pr-8 pl-3 rounded-lg bg-[#131b2e] border border-slate-700/70 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {filteredTemplates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    onClick={() => handleApplyTemplateDirect(tpl)}
+                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                  >
+                    <CanvasLiveThumb
+                      renderFn={tpl.renderPreview}
+                      width={tpl.width}
+                      height={tpl.height}
+                    />
+                    <div className="p-3">
+                      <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                        {isAr ? tpl.nameAr : tpl.nameEn}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                        <span>{tpl.width}×{tpl.height}</span>
+                        <span className="capitalize text-blue-400 font-sans">{tpl.category}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 3: Live Studio Backdrops (Image 4 Panel 5) ── */}
+          {activeTab === "backdrops" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1">
+                  {[
+                    { id: "all", nameAr: "الكل", nameEn: "All" },
+                    { id: "luxury", nameAr: "رخام وفاخر", nameEn: "Luxury" },
+                    { id: "studio", nameAr: "استوديو تصوير", nameEn: "Studio" },
+                    { id: "natural", nameAr: "طبيعة وخشب", nameEn: "Natural" },
+                    { id: "creative", nameAr: "نيون وسايبر", nameEn: "Cyber" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedBackdropCat(cat.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                        selectedBackdropCat === cat.id
+                          ? "bg-[#2563eb] text-white shadow-md font-bold"
+                          : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                      }`}
+                    >
+                      {isAr ? cat.nameAr : cat.nameEn}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-64">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={isAr ? "ابحث في الخلفيات..." : "Search backdrops..."}
+                    className="w-full h-8.5 pr-8 pl-3 rounded-lg bg-[#131b2e] border border-slate-700/70 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {filteredBackdrops.map((bg) => (
+                  <div
+                    key={bg.id}
+                    onClick={() => handleApplyBackdropDirect(bg)}
+                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                  >
+                    <CanvasLiveThumb
+                      renderFn={bg.render}
+                      width={1600}
+                      height={900}
+                    />
+                    <div className="p-3">
+                      <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                        {isAr ? bg.nameAr : bg.nameEn}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                        <span className="capitalize">{bg.category}</span>
+                        <span className="text-blue-400 font-bold">{isAr ? "تطبيق فوري" : "Apply"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 4: Custom Dimensions ── */}
+          {activeTab === "custom" && (
+            <div className="max-w-md mx-auto space-y-5 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                    {isAr ? "العرض (بكسل)" : "Width (px)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={customWidth}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setCustomWidth(val);
+                      if (lockRatio) setCustomHeight(Math.round(val / aspectRatioValue));
+                    }}
+                    className="w-full h-10 px-3 rounded-lg bg-[#131b2e] border border-slate-700 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                    min="50"
+                    max="8000"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                    {isAr ? "الارتفاع (بكسل)" : "Height (px)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={customHeight}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setCustomHeight(val);
+                      if (lockRatio) setCustomWidth(Math.round(val * aspectRatioValue));
+                    }}
+                    className="w-full h-10 px-3 rounded-lg bg-[#131b2e] border border-slate-700 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                    min="50"
+                    max="8000"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#131b2e] border border-slate-700/60">
+                <span className="text-xs text-slate-300">
+                  {isAr ? "قفل نسبة العرض إلى الارتفاع" : "Lock Aspect Ratio"}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
-                    onClose();
-                    onOpenTemplates();
+                    setLockRatio(!lockRatio);
+                    if (!lockRatio && customHeight > 0) {
+                      setAspectRatioValue(customWidth / customHeight);
+                    }
                   }}
-                  className="w-full py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-slate-100 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                  className={`p-1.5 rounded-md ${lockRatio ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{isAr ? "تصفح قوالب التصميم الحية" : "Browse Layered Templates"}</span>
+                  {lockRatio ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>
-              )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  {isAr ? "لون الخلفية" : "Background Color"}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "white", label: isAr ? "أبيض" : "White" },
+                    { id: "transparent", label: isAr ? "شفاف" : "Transparent" },
+                    { id: "black", label: isAr ? "أسود" : "Black" },
+                  ].map((bg) => (
+                    <button
+                      key={bg.id}
+                      type="button"
+                      onClick={() => setBgChoice(bg.id as any)}
+                      className={`py-2 rounded-lg text-xs font-semibold border transition-all ${
+                        bgChoice === bg.id
+                          ? "bg-[#2563eb] text-white border-blue-400 font-bold"
+                          : "bg-[#131b2e] text-slate-400 border-slate-700/70 hover:text-white"
+                      }`}
+                    >
+                      {bg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateCustom}
+                className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-500/20 transition-all mt-2 cursor-pointer"
+              >
+                {isAr ? "إنشاء الكانفاس الجديد" : "Create Canvas"}
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
   );
 };
+
+export default NewDesignModal;

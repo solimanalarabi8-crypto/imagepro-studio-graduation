@@ -90,6 +90,30 @@ html.light-theme {
   --studio-btn-border: #cbd5e1;
 }
 
+/* Modern Thin Scrollbar for Studio Modals & Panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 @layer base {
   html, body, #root { height: 100vh; width: 100vw; overflow: hidden; margin: 0; padding: 0; touch-action: none; overscroll-behavior: none; }
   body { background: var(--studio-shell); color: var(--studio-text-main); font-family: "IBM Plex Sans Arabic", "Inter", sans-serif; }
@@ -5425,6 +5449,62 @@ html.light-theme .sidebar-studio-btn-ai {
   border-radius: 16px;
   overflow: hidden;
 }
+
+/* ─── Creative Hub Modal Window (Wide Canva-Grade Layout) ─── */
+.creative-hub-modal {
+  width: 96vw !important;
+  max-width: 1380px !important;
+  max-height: 92vh !important;
+  height: 90vh !important;
+  background: #090e17 !important;
+  border: 1px solid rgba(45, 212, 191, 0.35) !important;
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.9), 0 0 45px rgba(20, 184, 166, 0.25) !important;
+  border-radius: 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.creative-hub-modal .creative-body-split {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.creative-hub-modal .creative-grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 24px;
+}
+
+.creative-hub-modal .creative-cards-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.creative-hub-modal .card-thumb-canvas-box,
+.creative-hub-modal .card-thumb-tpl-box {
+  height: 140px !important;
+  width: 100% !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #030712 !important;
+  overflow: hidden !important;
+  border-radius: 12px !important;
+}
+
+.creative-hub-modal .card-thumb-canvas-box canvas,
+.creative-hub-modal .card-thumb-tpl-box canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
 
 
 

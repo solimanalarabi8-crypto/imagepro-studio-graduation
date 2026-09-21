@@ -5,7 +5,6 @@ import {
   FolderKanban,
   Shapes,
   Star,
-  Clock,
   Search,
   Check,
   Eye,
@@ -17,14 +16,17 @@ import {
   Layers,
   Camera,
   Image as ImageIcon,
-  Move
+  Folder,
+  Share2,
+  Home,
+  SlidersHorizontal,
+  ExternalLink
 } from "lucide-react";
 import {
   CREATIVE_BACKDROPS,
   CREATIVE_BACKDROP_CATEGORIES,
   CreativeBackdropPreset,
-  BackdropCategory,
-  EXPANDED_BACKDROP_THEMES
+  BackdropCategory
 } from "@/lib/creative-backgrounds";
 import {
   EDITABLE_TEMPLATES,
@@ -44,6 +46,8 @@ import {
   StockPhotoCategory
 } from "@/lib/stock-photos-library";
 import { StoredProjectMetadata } from "@/lib/autosave-manager";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 interface CreativeLibraryModalProps {
   isOpen: boolean;
@@ -57,6 +61,29 @@ interface CreativeLibraryModalProps {
   lang?: "ar" | "en";
 }
 
+// Live Canvas Thumbnail renderer for real Canva-grade preview
+const LiveThumbCanvas: React.FC<{
+  renderFn: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+  width: number;
+  height: number;
+}> = ({ renderFn, width, height }) => {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const tw = 320;
+    const th = Math.max(160, Math.round((tw / width) * height));
+    canvas.width = tw;
+    canvas.height = th;
+    ctx.clearRect(0, 0, tw, th);
+    renderFn(ctx, tw, th);
+  }, [renderFn, width, height]);
+
+  return <canvas ref={ref} className="w-full h-full object-contain pointer-events-none transition-transform duration-300 group-hover:scale-105" />;
+};
+
 export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
   isOpen,
   onClose,
@@ -68,63 +95,62 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
   projects,
   lang = "ar"
 }) => {
-  const [activeMainTab, setActiveMainTab] = useState<
-    "backgrounds" | "templates" | "assets" | "stockPhotos" | "projects" | "favorites"
-  >("backgrounds");
+  const isAr = lang === "ar";
+
+  // Active Main Navigation Section (Matching Image 4 Sidebar):
+  // "templates" = مكتبة القوالب (Panel 4)
+  // "backdrops" = مكتبة الخلفيات (Panel 5)
+  // "assets" = مكتبة العناصر الإبداعية (Panel 6)
+  // "photos" = مكتبة الصور
+  // "projects" = مشاريعي (Panel 7)
+  // "favorites" = المفضلة
+  const [activeSection, setActiveSection] = useState<"templates" | "backdrops" | "assets" | "photos" | "projects" | "favorites">("backdrops");
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState("");
   const [bgCategory, setBgCategory] = useState<BackdropCategory | "all">("all");
   const [tplCategory, setTplCategory] = useState<TemplateCategory | "all">("all");
   const [assetCategory, setAssetCategory] = useState<string>("all");
-  const [stockCategory, setStockCategory] = useState<StockPhotoCategory>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [photoCategory, setPhotoCategory] = useState<StockPhotoCategory>("all");
 
-  const [selectedBg, setSelectedBg] = useState<CreativeBackdropPreset>(CREATIVE_BACKDROPS[0]);
-  const [selectedTpl, setSelectedTpl] = useState<EditableTemplate>(EDITABLE_TEMPLATES[0]);
-  const [selectedStock, setSelectedStock] = useState<StockPhotoItem>(STOCK_PHOTOS[0]);
-  
-  // Local storage persisted favorites
+  // Favorites state
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem("imagepro_library_favorites");
-      if (saved) return new Set(JSON.parse(saved));
-    } catch {}
-    return new Set(["prod-marble-podium", "insta-sale-bold", "stock-studio-pedestal", "shape-gold-star"]);
+      const saved = localStorage.getItem("imagepro_hub_favorites");
+      return saved ? new Set(JSON.parse(saved)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
   });
 
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const isAr = lang === "ar";
-
-  const toggleFavorite = (id: string) => {
+  const toggleFavorite = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setFavoriteIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       try {
-        localStorage.setItem("imagepro_library_favorites", JSON.stringify(Array.from(next)));
+        localStorage.setItem("imagepro_hub_favorites", JSON.stringify(Array.from(next)));
       } catch {}
       return next;
     });
   };
 
-  // Filtered Backgrounds
-  const filteredBackgrounds = useMemo(() => {
-    let list = CREATIVE_BACKDROPS;
-    if (bgCategory !== "all") list = list.filter((b) => b.category === bgCategory);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (b) =>
-          b.nameAr.toLowerCase().includes(q) ||
-          b.nameEn.toLowerCase().includes(q) ||
-          b.tags.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [bgCategory, searchQuery]);
+  // Dedicated Big Preview Modal state
+  const [previewItem, setPreviewItem] = useState<{
+    type: "template" | "backdrop" | "photo" | "asset";
+    title: string;
+    dims: string;
+    renderFn?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+    onApply: () => void;
+  } | null>(null);
 
   // Filtered Templates
   const filteredTemplates = useMemo(() => {
     let list = EDITABLE_TEMPLATES;
-    if (tplCategory !== "all") list = list.filter((t) => t.category === tplCategory);
+    if (tplCategory !== "all") {
+      list = list.filter((t) => t.category === tplCategory);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
@@ -137,364 +163,499 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
     return list;
   }, [tplCategory, searchQuery]);
 
+  // Filtered Backdrops
+  const filteredBackdrops = useMemo(() => {
+    let list = CREATIVE_BACKDROPS;
+    if (bgCategory !== "all") {
+      list = list.filter((b) => b.category === bgCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (b) =>
+          b.nameAr.toLowerCase().includes(q) ||
+          b.nameEn.toLowerCase().includes(q) ||
+          b.tags.some((tag) => tag.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [bgCategory, searchQuery]);
+
   // Filtered Assets
   const filteredAssets = useMemo(() => {
     let list = ASSET_GRAPHICS;
-    if (assetCategory !== "all") list = list.filter((a) => a.category === assetCategory);
+    if (assetCategory !== "all") {
+      list = list.filter((a) => a.category === assetCategory);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (a) =>
           a.nameAr.toLowerCase().includes(q) ||
           a.nameEn.toLowerCase().includes(q) ||
-          a.tags.some((t) => t.toLowerCase().includes(q))
+          a.tags.some((tag) => tag.toLowerCase().includes(q))
       );
     }
     return list;
   }, [assetCategory, searchQuery]);
 
-  // Filtered Stock Photos
-  const filteredStockPhotos = useMemo(() => {
+  // Filtered Photos
+  const filteredPhotos = useMemo(() => {
     let list = STOCK_PHOTOS;
-    if (stockCategory !== "all") list = list.filter((p) => p.category === stockCategory);
+    if (photoCategory !== "all") {
+      list = list.filter((p) => p.category === photoCategory);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (p) =>
           p.nameAr.toLowerCase().includes(q) ||
           p.nameEn.toLowerCase().includes(q) ||
-          p.tags.some((t) => t.toLowerCase().includes(q))
+          p.tags.some((tag) => tag.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [stockCategory, searchQuery]);
-
-  // Live Canvas Rendering for Preview Pane
-  useEffect(() => {
-    if (!isOpen) return;
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (activeMainTab === "backgrounds") {
-      selectedBg.render(ctx, canvas.width, canvas.height);
-    } else if (activeMainTab === "templates") {
-      selectedTpl.renderPreview(ctx, canvas.width, canvas.height);
-    } else if (activeMainTab === "stockPhotos") {
-      selectedStock.render(ctx, canvas.width, canvas.height);
-    }
-  }, [isOpen, activeMainTab, selectedBg, selectedTpl, selectedStock]);
+  }, [photoCategory, searchQuery]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6" onClick={onClose} dir={isAr ? "rtl" : "ltr"}>
       <div
-        className="modal-window creative-hub-modal"
+        className="w-full max-w-7xl h-[92vh] flex overflow-hidden rounded-2xl bg-[#090d16] border border-slate-800 text-slate-100 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
-        dir={isAr ? "rtl" : "ltr"}
       >
-        {/* Header */}
-        <div className="modal-header">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-400 flex items-center justify-center border border-teal-500/20">
-              <Sparkles size={16} />
-            </span>
-            <div>
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                {isAr ? "المكتبة الإبداعية الشاملة (Creative Platform)" : "Creative Studio Library"}
-                <span className="text-[10px] font-normal text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
-                  {isAr ? "قوالب • خلفيات • أصول • صور مرخصة" : "Templates • Backgrounds • Assets • Photos"}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                {isAr
-                  ? "مكتبة متكاملة جاهزة للتعديل: اسحب وأفلت في مساحة العمل أو اختر لتطبيق فوري"
-                  : "All-in-one design assets: drag & drop onto canvas or click to apply instantly"}
-              </p>
-            </div>
-          </div>
-          <button className="modal-close-btn" onClick={onClose}><X size={15} /></button>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="creative-nav-bar">
-          <div className="creative-tabs-row">
-            <button
-              className={`creative-tab-pill ${activeMainTab === "backgrounds" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("backgrounds")}
-            >
-              <Palette size={13} />
-              <span>{isAr ? "خلفيات الاستوديو" : "Backdrops"}</span>
-              <span className="tab-count">{CREATIVE_BACKDROPS.length}</span>
-            </button>
-
-            <button
-              className={`creative-tab-pill ${activeMainTab === "templates" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("templates")}
-            >
-              <LayoutTemplate size={13} />
-              <span>{isAr ? "قوالب حية قابلة للتعديل" : "Live Templates"}</span>
-              <span className="tab-count">{EDITABLE_TEMPLATES.length}</span>
-            </button>
-
-            <button
-              className={`creative-tab-pill ${activeMainTab === "assets" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("assets")}
-            >
-              <Shapes size={13} />
-              <span>{isAr ? "أصول وعناصر و3D" : "Creative Assets"}</span>
-              <span className="tab-count">{ASSET_GRAPHICS.length}</span>
-            </button>
-
-            <button
-              className={`creative-tab-pill ${activeMainTab === "stockPhotos" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("stockPhotos")}
-            >
-              <Camera size={13} />
-              <span>{isAr ? "صور فوتوغرافية مرخصة" : "Stock Photos"}</span>
-              <span className="tab-count">{STOCK_PHOTOS.length}</span>
-            </button>
-
-            <button
-              className={`creative-tab-pill ${activeMainTab === "favorites" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("favorites")}
-            >
-              <Star size={13} className={favoriteIds.size > 0 ? "text-amber-400 fill-amber-400" : ""} />
-              <span>{isAr ? "المفضلة" : "Favorites"}</span>
-              <span className="tab-count">{favoriteIds.size}</span>
-            </button>
-          </div>
-
-          <div className="creative-search-box">
-            <Search size={13} className="text-slate-400" />
-            <input
-              type="text"
-              placeholder={isAr ? "بحث بالاسم أو الوسوم..." : "Search assets, tags..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="creative-search-input"
-            />
-          </div>
-        </div>
-
-        {/* Subcategories Filter Chips */}
-        <div className="creative-subcategories-bar">
-          {activeMainTab === "backgrounds" && (
-            <div className="chips-scroller">
-              {CREATIVE_BACKDROP_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  className={`category-chip ${bgCategory === c.id ? "active" : ""}`}
-                  onClick={() => setBgCategory(c.id as any)}
-                >
-                  <span>{c.icon}</span>
-                  <span>{isAr ? c.nameAr : c.nameEn}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeMainTab === "templates" && (
-            <div className="chips-scroller">
-              {TEMPLATE_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  className={`category-chip ${tplCategory === c.id ? "active" : ""}`}
-                  onClick={() => setTplCategory(c.id as any)}
-                >
-                  <span>{c.icon}</span>
-                  <span>{isAr ? c.nameAr : c.nameEn}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeMainTab === "assets" && (
-            <div className="chips-scroller">
-              {ASSET_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  className={`category-chip ${assetCategory === c.id ? "active" : ""}`}
-                  onClick={() => setAssetCategory(c.id)}
-                >
-                  <span>{c.icon}</span>
-                  <span>{isAr ? c.nameAr : c.nameEn}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeMainTab === "stockPhotos" && (
-            <div className="chips-scroller">
-              {STOCK_PHOTO_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  className={`category-chip ${stockCategory === c.id ? "active" : ""}`}
-                  onClick={() => setStockCategory(c.id)}
-                >
-                  <span>{c.icon}</span>
-                  <span>{isAr ? c.nameAr : c.nameEn}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Main Work Area: Catalog Grid + Live Inspector Preview Pane */}
-        <div className="creative-body-split">
-          {/* Left / Center Grid */}
-          <div className="creative-grid-scroll">
-            {/* 1. Backgrounds */}
-            {activeMainTab === "backgrounds" && (
-              <div className="creative-cards-grid">
-                {filteredBackgrounds.map((bg) => (
-                  <div
-                    key={bg.id}
-                    className={`creative-card ${selectedBg.id === bg.id ? "selected" : ""}`}
-                    onClick={() => setSelectedBg(bg)}
-                  >
-                    <div className="card-thumb-canvas-box" style={{ background: bg.accentColor }}>
-                      <button
-                        className={`card-fav-btn ${favoriteIds.has(bg.id) ? "is-fav" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(bg.id);
-                        }}
-                      >
-                        <Star size={12} />
-                      </button>
-                    </div>
-                    <div className="card-meta">
-                      <span className="card-title">{isAr ? bg.nameAr : bg.nameEn}</span>
-                      <div className="card-tags">
-                        {bg.tags.slice(0, 2).map((t, idx) => (
-                          <span key={idx} className="tag-pill">{t}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        {/* ── 1. Left Sidebar Navigation (Matching Image 4) ── */}
+        <aside className="w-56 bg-[#0d1322] border-e border-slate-800/80 flex flex-col justify-between p-3 select-none flex-shrink-0">
+          <div className="space-y-4">
+            {/* Brand Logo */}
+            <div className="px-3 py-2 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/25">
+                <Sparkles className="w-4 h-4" />
               </div>
-            )}
-
-            {/* 2. Templates */}
-            {activeMainTab === "templates" && (
-              <div className="creative-cards-grid">
-                {filteredTemplates.map((tpl) => (
-                  <div
-                    key={tpl.id}
-                    className={`creative-card ${selectedTpl.id === tpl.id ? "selected" : ""}`}
-                    onClick={() => setSelectedTpl(tpl)}
-                  >
-                    <div className="card-thumb-tpl-box">
-                      <span className="aspect-badge">{tpl.aspect}</span>
-                      <button
-                        className={`card-fav-btn ${favoriteIds.has(tpl.id) ? "is-fav" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(tpl.id);
-                        }}
-                      >
-                        <Star size={12} />
-                      </button>
-                      <div className="card-tpl-mini">
-                        <span style={{ fontSize: "11px", fontWeight: "bold" }}>{tpl.width}×{tpl.height}</span>
-                      </div>
-                    </div>
-                    <div className="card-meta">
-                      <span className="card-title">{isAr ? tpl.nameAr : tpl.nameEn}</span>
-                      <div className="card-tags">
-                        <span className="tag-pill">{tpl.layers.length} {isAr ? "طبقات حية" : "layers"}</span>
-                        {tpl.tags.slice(0, 1).map((t, idx) => (
-                          <span key={idx} className="tag-pill">{t}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <div className="text-sm font-black tracking-wide text-white">ImagePro <span className="text-blue-400">Studio</span></div>
+                <div className="text-[10px] text-slate-500">Creative Platform</div>
               </div>
-            )}
+            </div>
 
-            {/* 3. Assets */}
-            {activeMainTab === "assets" && (
-              <div className="creative-assets-grid">
-                {filteredAssets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="asset-cell"
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("application/json", JSON.stringify({
-                        type: "asset",
-                        assetId: asset.id
-                      }));
+            {/* Navigation Menu Links */}
+            <nav className="space-y-1">
+              {[
+                { id: "backdrops", labelAr: "الخلفيات", labelEn: "Backdrops", icon: <Palette className="w-4 h-4" />, count: CREATIVE_BACKDROPS.length },
+                { id: "templates", labelAr: "القوالب", labelEn: "Templates", icon: <LayoutTemplate className="w-4 h-4" />, count: EDITABLE_TEMPLATES.length },
+                { id: "assets", labelAr: "العناصر", labelEn: "Elements", icon: <Shapes className="w-4 h-4" />, count: ASSET_GRAPHICS.length },
+                { id: "photos", labelAr: "الصور", labelEn: "Photos", icon: <Camera className="w-4 h-4" />, count: STOCK_PHOTOS.length },
+                { id: "projects", labelAr: "مشاريعي", labelEn: "My Projects", icon: <Folder className="w-4 h-4" />, count: projects.length },
+                { id: "favorites", labelAr: "المفضلة", labelEn: "Favorites", icon: <Star className="w-4 h-4" />, count: favoriteIds.size },
+              ].map((item) => {
+                const isActive = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveSection(item.id as any);
+                      setSearchQuery("");
                     }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                      isActive
+                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-600/30"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-[#131b2e]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {item.icon}
+                      <span>{isAr ? item.labelAr : item.labelEn}</span>
+                    </div>
+                    {item.count !== undefined && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"}`}>
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* User Profile info matching Image 4 */}
+          <div className="pt-3 border-t border-slate-800/60 px-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
+                👤
+              </div>
+              <span className="text-xs text-slate-300 font-medium">سليمان العربي</span>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </aside>
+
+        {/* ── 2. Main Content Area ── */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#0b0f19]">
+          {/* Top Search & Filter Bar */}
+          <header className="px-6 py-4 border-b border-slate-800/80 bg-[#0d1322]/90 flex items-center justify-between gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  activeSection === "backdrops"
+                    ? (isAr ? "ابحث في الخلفيات (رخام، استوديو، خشب، نيون، طبيعة)..." : "Search backdrops...")
+                    : activeSection === "templates"
+                    ? (isAr ? "ابحث في القوالب (سوشيال، بوستر، سيرة، عرض)..." : "Search templates...")
+                    : activeSection === "assets"
+                    ? (isAr ? "ابحث في العناصر والأشكال..." : "Search elements...")
+                    : (isAr ? "ابحث في الصور..." : "Search photos...")
+                }
+                className="w-full h-10 pr-10 pl-4 rounded-xl bg-[#131b2e] border border-slate-700/60 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 transition-all"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">
+                {activeSection === "backdrops" && `${filteredBackdrops.length} ${isAr ? "خلفية متاحة" : "backdrops"}`}
+                {activeSection === "templates" && `${filteredTemplates.length} ${isAr ? "قالب متاح" : "templates"}`}
+                {activeSection === "assets" && `${filteredAssets.length} ${isAr ? "عنصر متاح" : "elements"}`}
+                {activeSection === "photos" && `${filteredPhotos.length} ${isAr ? "صورة متاحة" : "photos"}`}
+              </span>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-xl bg-[#131b2e] hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </header>
+
+          {/* Category Filter Pills (Matching Image 4 Middle Panels) */}
+          <div className="px-6 py-2.5 border-b border-slate-800/60 bg-[#0d1322]/40 flex items-center gap-2 overflow-x-auto scrollbar-none">
+            {activeSection === "backdrops" && (
+              <>
+                {[
+                  { id: "all", nameAr: "الكل" },
+                  { id: "nature", nameAr: "طبيعة وجبال" },
+                  { id: "marble", nameAr: "رخام فاخر" },
+                  { id: "studio", nameAr: "استوديو تصوير" },
+                  { id: "wood", nameAr: "خشب ومقاهي" },
+                  { id: "cyberpunk", nameAr: "فضاء ونيون" },
+                  { id: "ocean", nameAr: "ماء ومحيط" },
+                  { id: "abstract", nameAr: "تجريدي وعمارة" },
+                  { id: "luxury", nameAr: "فخامة وأوبسيديان" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setBgCategory(cat.id as any)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      bgCategory === cat.id
+                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
+                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                    }`}
+                  >
+                    {cat.nameAr}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {activeSection === "templates" && (
+              <>
+                {[
+                  { id: "all", nameAr: "الكل" },
+                  { id: "social", nameAr: "سوشيال ميديا" },
+                  { id: "business", nameAr: "أعمال وشركات" },
+                  { id: "marketing", nameAr: "تسويق وعروض" },
+                  { id: "education", nameAr: "تعليم وشهادات" },
+                  { id: "posters", nameAr: "ملصقات وفن" },
+                  { id: "invitations", nameAr: "دعوات ومناسبات" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setTplCategory(cat.id as any)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      tplCategory === cat.id
+                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
+                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                    }`}
+                  >
+                    {cat.nameAr}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {activeSection === "assets" && (
+              <>
+                {[
+                  { id: "all", nameAr: "الكل" },
+                  { id: "badges", nameAr: "شارات وأختام" },
+                  { id: "geometric", nameAr: "أشكال هندسية" },
+                  { id: "arrows", nameAr: "أسهم ومؤشرات" },
+                  { id: "frames", nameAr: "إطارات ملكية" },
+                  { id: "social-icons", nameAr: "أيقونات تواصل" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setAssetCategory(cat.id)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      assetCategory === cat.id
+                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
+                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                    }`}
+                  >
+                    {cat.nameAr}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {activeSection === "photos" && (
+              <>
+                {[
+                  { id: "all", nameAr: "جميع الصور" },
+                  { id: "nature", nameAr: "طبيعة ومناظر" },
+                  { id: "business", nameAr: "أعمال ومكاتب" },
+                  { id: "lifestyle", nameAr: "لايف ستايل" },
+                  { id: "food", nameAr: "مأكولات ومقاهي" },
+                  { id: "architecture", nameAr: "عمارة ومدن" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setPhotoCategory(cat.id as any)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      photoCategory === cat.id
+                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
+                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                    }`}
+                  >
+                    {cat.nameAr}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* ── 3. Main Grid of Cards (4 Columns Matching Image 4) ── */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {/* ── Backdrops Grid (Panel 5 in Image 4) ── */}
+            {activeSection === "backdrops" && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredBackdrops.map((bg) => {
+                  const isFav = favoriteIds.has(bg.id);
+                  return (
+                    <div
+                      key={bg.id}
+                      className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+                        <LiveThumbCanvas renderFn={bg.render} width={1600} height={900} />
+                        
+                        {/* Hover Overlay with Action Buttons */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity p-2">
+                          <button
+                            onClick={() => {
+                              onApplyBackground(bg);
+                              onClose();
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold shadow-md transition-transform active:scale-95"
+                          >
+                            {isAr ? "تطبيق فوري" : "Apply"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setPreviewItem({
+                                type: "backdrop",
+                                title: isAr ? bg.nameAr : bg.nameEn,
+                                dims: "1920 × 1080",
+                                renderFn: bg.render,
+                                onApply: () => {
+                                  onApplyBackground(bg);
+                                  onClose();
+                                }
+                              })
+                            }
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                            title="معاينة كاملة"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Favorite Button */}
+                        <button
+                          onClick={(e) => toggleFavorite(bg.id, e)}
+                          className={`absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-colors ${
+                            isFav ? "bg-amber-500 text-white" : "bg-black/40 text-slate-400 hover:text-amber-400"
+                          }`}
+                        >
+                          <Star className="w-3.5 h-3.5 fill-current" />
+                        </button>
+                      </div>
+
+                      <div className="p-3">
+                        <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                          {isAr ? bg.nameAr : bg.nameEn}
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                          <span className="capitalize">{bg.category}</span>
+                          <span className="font-mono">1920×1080</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Templates Grid (Panel 4 in Image 4) ── */}
+            {activeSection === "templates" && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredTemplates.map((tpl) => {
+                  const isFav = favoriteIds.has(tpl.id);
+                  return (
+                    <div
+                      key={tpl.id}
+                      className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+                        <LiveThumbCanvas renderFn={tpl.renderPreview} width={tpl.width} height={tpl.height} />
+
+                        {/* Hover Overlay */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity p-2">
+                          <button
+                            onClick={() => {
+                              onApplyTemplate(tpl);
+                              onClose();
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold shadow-md transition-transform active:scale-95"
+                          >
+                            {isAr ? "استخدام القالب" : "Use Template"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setPreviewItem({
+                                type: "template",
+                                title: isAr ? tpl.nameAr : tpl.nameEn,
+                                dims: `${tpl.width} × ${tpl.height}`,
+                                renderFn: tpl.renderPreview,
+                                onApply: () => {
+                                  onApplyTemplate(tpl);
+                                  onClose();
+                                }
+                              })
+                            }
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                            title="معاينة كاملة"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Favorite Button */}
+                        <button
+                          onClick={(e) => toggleFavorite(tpl.id, e)}
+                          className={`absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-colors ${
+                            isFav ? "bg-amber-500 text-white" : "bg-black/40 text-slate-400 hover:text-amber-400"
+                          }`}
+                        >
+                          <Star className="w-3.5 h-3.5 fill-current" />
+                        </button>
+                      </div>
+
+                      <div className="p-3">
+                        <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                          {isAr ? tpl.nameAr : tpl.nameEn}
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                          <span className="capitalize">{tpl.category}</span>
+                          <span className="font-mono">{tpl.width}×{tpl.height}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Elements / Assets Grid (Panel 6 in Image 4) ── */}
+            {activeSection === "assets" && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                {filteredAssets.map((asset) => (
+                  <button
+                    key={asset.id}
                     onClick={() => {
                       onAddAssetLayer(asset);
                       onClose();
                     }}
-                    title={isAr ? "انقر للإضافة أو اسحب إلى مساحة العمل" : "Click to add or drag to canvas"}
+                    className="group flex flex-col items-center justify-center p-4 rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 transition-all hover:-translate-y-1 text-center cursor-pointer"
                   >
-                    <button
-                      className={`card-fav-btn-mini ${favoriteIds.has(asset.id) ? "is-fav" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(asset.id);
-                      }}
-                    >
-                      <Star size={10} />
-                    </button>
-                    <div className="asset-canvas-preview">
-                      <Shapes size={28} className="text-teal-400" />
+                    <div className="w-16 h-16 rounded-xl bg-slate-950/80 flex items-center justify-center overflow-hidden mb-2 group-hover:scale-110 transition-transform">
+                      <canvas
+                        ref={(canv) => {
+                          if (!canv) return;
+                          const ctx = canv.getContext("2d");
+                          if (!ctx) return;
+                          canv.width = 64;
+                          canv.height = 64;
+                          ctx.clearRect(0, 0, 64, 64);
+                          asset.render(ctx, 64);
+                        }}
+                        className="w-full h-full object-contain pointer-events-none"
+                      />
                     </div>
-                    <span className="asset-label">{isAr ? asset.nameAr : asset.nameEn}</span>
-                  </div>
+                    <span className="text-[11px] font-bold text-slate-200 group-hover:text-blue-400 line-clamp-1">
+                      {isAr ? asset.nameAr : asset.nameEn}
+                    </span>
+                  </button>
                 ))}
               </div>
             )}
 
-            {/* 4. Stock Photos */}
-            {activeMainTab === "stockPhotos" && (
-              <div className="creative-cards-grid">
-                {filteredStockPhotos.map((photo) => (
+            {/* ── Stock Photos Grid ── */}
+            {activeSection === "photos" && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredPhotos.map((photo) => (
                   <div
                     key={photo.id}
-                    className={`creative-card ${selectedStock.id === photo.id ? "selected" : ""}`}
-                    onClick={() => setSelectedStock(photo)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("application/json", JSON.stringify({
-                        type: "stock-photo",
-                        photoId: photo.id
-                      }));
-                    }}
+                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all hover:-translate-y-1"
                   >
-                    <div className="card-thumb-canvas-box" style={{ background: photo.dominantColor }}>
-                      <span className="aspect-badge">{photo.aspect}</span>
-                      <button
-                        className={`card-fav-btn ${favoriteIds.has(photo.id) ? "is-fav" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(photo.id);
-                        }}
-                      >
-                        <Star size={12} />
-                      </button>
-                      <div className="card-tpl-mini">
-                        <ImageIcon size={20} className="text-white/70" />
+                    <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+                      <LiveThumbCanvas renderFn={photo.render} width={photo.width} height={photo.height} />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity p-2">
+                        <button
+                          onClick={() => {
+                            if (onApplyStockPhoto) onApplyStockPhoto(photo, false);
+                            onClose();
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold"
+                        >
+                          {isAr ? "تعيين كخلفية" : "As Background"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (onApplyStockPhoto) onApplyStockPhoto(photo, true);
+                            onClose();
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs"
+                        >
+                          {isAr ? "كطبقة" : "As Layer"}
+                        </button>
                       </div>
                     </div>
-                    <div className="card-meta">
-                      <span className="card-title">{isAr ? photo.nameAr : photo.nameEn}</span>
-                      <div className="card-tags">
-                        <span className="tag-pill">{photo.width}×{photo.height}</span>
-                        {photo.tags.slice(0, 1).map((t, idx) => (
-                          <span key={idx} className="tag-pill">{t}</span>
-                        ))}
+                    <div className="p-3">
+                      <div className="text-xs font-bold text-slate-100 line-clamp-1">
+                        {isAr ? photo.nameAr : photo.nameEn}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                        {photo.width}×{photo.height}
                       </div>
                     </div>
                   </div>
@@ -502,161 +663,142 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               </div>
             )}
 
-            {/* 5. Favorites View */}
-            {activeMainTab === "favorites" && (
-              <div className="favorites-collection">
-                <div className="fav-section-title">
-                  <span>{isAr ? "العناصر المحفوظة في المفضلة" : "Favorite Items"} ({favoriteIds.size})</span>
-                </div>
-                <div className="creative-cards-grid">
-                  {CREATIVE_BACKDROPS.filter((b) => favoriteIds.has(b.id)).map((bg) => (
-                    <div
-                      key={bg.id}
-                      className="creative-card selected"
-                      onClick={() => {
-                        onApplyBackground(bg);
-                        onClose();
-                      }}
-                    >
-                      <div className="card-thumb-canvas-box" style={{ background: bg.accentColor }}>
-                        <span className="tag-pill" style={{ position: "absolute", top: 6, left: 6 }}>خلفية</span>
+            {/* ── Projects Grid (Panel 7 in Image 4) ── */}
+            {activeSection === "projects" && (
+              <div className="space-y-4">
+                {projects.length === 0 ? (
+                  <div className="py-20 flex flex-col items-center justify-center text-center">
+                    <Folder className="w-12 h-12 text-slate-600 mb-3" />
+                    <p className="text-sm text-slate-400">{isAr ? "لا توجد مشاريع محفوظة بعد" : "No saved projects yet"}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {projects.map((proj) => (
+                      <div
+                        key={proj.id}
+                        onClick={() => {
+                          onOpenProject(String(proj.id));
+                          onClose();
+                        }}
+                        className="group flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                      >
+                        <div className="aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+                          {proj.thumbnail ? (
+                            <img src={proj.thumbnail} alt={proj.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-8 h-8 text-slate-600" />
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <div className="text-xs font-bold text-slate-100 line-clamp-1">{proj.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                            {proj.width}×{proj.height} px
+                          </div>
+                        </div>
                       </div>
-                      <div className="card-meta">
-                        <span className="card-title">{isAr ? bg.nameAr : bg.nameEn}</span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-                  {EDITABLE_TEMPLATES.filter((t) => favoriteIds.has(t.id)).map((tpl) => (
-                    <div
-                      key={tpl.id}
-                      className="creative-card selected"
-                      onClick={() => {
-                        onApplyTemplate(tpl);
-                        onClose();
-                      }}
-                    >
-                      <div className="card-thumb-tpl-box">
-                        <span className="tag-pill" style={{ position: "absolute", top: 6, left: 6 }}>قالب حي</span>
+            {/* ── Favorites Grid ── */}
+            {activeSection === "favorites" && (
+              <div className="space-y-4">
+                {favoriteIds.size === 0 ? (
+                  <div className="py-20 flex flex-col items-center justify-center text-center">
+                    <Star className="w-12 h-12 text-slate-600 mb-3" />
+                    <p className="text-sm text-slate-400">{isAr ? "لم تقم بإضافة عناصر إلى المفضلة بعد" : "No favorites added yet"}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {CREATIVE_BACKDROPS.filter((b) => favoriteIds.has(b.id)).map((bg) => (
+                      <div
+                        key={bg.id}
+                        onClick={() => {
+                          onApplyBackground(bg);
+                          onClose();
+                        }}
+                        className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                      >
+                        <div className="aspect-video w-full bg-slate-950 flex items-center justify-center">
+                          <LiveThumbCanvas renderFn={bg.render} width={1600} height={900} />
+                        </div>
+                        <div className="p-3">
+                          <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 line-clamp-1">
+                            {isAr ? bg.nameAr : bg.nameEn}
+                          </div>
+                        </div>
                       </div>
-                      <div className="card-meta">
-                        <span className="card-title">{isAr ? tpl.nameAr : tpl.nameEn}</span>
+                    ))}
+                    {EDITABLE_TEMPLATES.filter((t) => favoriteIds.has(t.id)).map((tpl) => (
+                      <div
+                        key={tpl.id}
+                        onClick={() => {
+                          onApplyTemplate(tpl);
+                          onClose();
+                        }}
+                        className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                      >
+                        <div className="aspect-video w-full bg-slate-950 flex items-center justify-center">
+                          <LiveThumbCanvas renderFn={tpl.renderPreview} width={tpl.width} height={tpl.height} />
+                        </div>
+                        <div className="p-3">
+                          <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 line-clamp-1">
+                            {isAr ? tpl.nameAr : tpl.nameEn}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-
-                  {STOCK_PHOTOS.filter((p) => favoriteIds.has(p.id)).map((photo) => (
-                    <div
-                      key={photo.id}
-                      className="creative-card selected"
-                      onClick={() => {
-                        if (onApplyStockPhoto) onApplyStockPhoto(photo, false);
-                        onClose();
-                      }}
-                    >
-                      <div className="card-thumb-canvas-box" style={{ background: photo.dominantColor }}>
-                        <span className="tag-pill" style={{ position: "absolute", top: 6, left: 6 }}>صورة</span>
-                      </div>
-                      <div className="card-meta">
-                        <span className="card-title">{isAr ? photo.nameAr : photo.nameEn}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-
-          {/* Right Inspector & Live Canvas Preview Box */}
-          <div className="creative-inspector-pane">
-            <div className="inspector-head">
-              <span className="inspector-sub">
-                {activeMainTab === "backgrounds"
-                  ? isAr ? "معاينة خلفية الاستوديو" : "Backdrop Preview"
-                  : activeMainTab === "templates"
-                  ? isAr ? "معاينة طبقات القالب" : "Template Preview"
-                  : activeMainTab === "stockPhotos"
-                  ? isAr ? "معاينة الصورة الفوتوغرافية" : "Stock Photo Preview"
-                  : isAr ? "معاينة العنصر" : "Asset Details"}
-              </span>
-              <h4 className="inspector-title">
-                {activeMainTab === "backgrounds"
-                  ? isAr ? selectedBg.nameAr : selectedBg.nameEn
-                  : activeMainTab === "templates"
-                  ? isAr ? selectedTpl.nameAr : selectedTpl.nameEn
-                  : activeMainTab === "stockPhotos"
-                  ? isAr ? selectedStock.nameAr : selectedStock.nameEn
-                  : isAr ? "أصل رسومي قابل للتخصيص" : "Vector Element"}
-              </h4>
-            </div>
-
-            {/* High-definition Live Canvas Preview */}
-            <div className="inspector-canvas-container">
-              <canvas
-                ref={previewCanvasRef}
-                width={360}
-                height={260}
-                className="inspector-preview-canvas"
-              />
-            </div>
-
-            {/* Actions Toolbar */}
-            <div className="inspector-actions">
-              {activeMainTab === "backgrounds" && (
-                <button
-                  className="inspector-btn-primary"
-                  onClick={() => {
-                    onApplyBackground(selectedBg);
-                    onClose();
-                  }}
-                >
-                  <Palette size={14} />
-                  <span>{isAr ? "تطبيق هذه الخلفية على التصميم" : "Apply as Backdrop"}</span>
-                </button>
-              )}
-
-              {activeMainTab === "templates" && (
-                <button
-                  className="inspector-btn-primary"
-                  onClick={() => {
-                    onApplyTemplate(selectedTpl);
-                    onClose();
-                  }}
-                >
-                  <LayoutTemplate size={14} />
-                  <span>{isAr ? "فتح القالب وبدء التعديل الحي" : "Open & Edit Live Template"}</span>
-                </button>
-              )}
-
-              {activeMainTab === "stockPhotos" && (
-                <div className="space-y-2 w-full">
-                  <button
-                    className="inspector-btn-primary w-full"
-                    onClick={() => {
-                      if (onApplyStockPhoto) onApplyStockPhoto(selectedStock, false);
-                      onClose();
-                    }}
-                  >
-                    <ImageIcon size={14} />
-                    <span>{isAr ? "تعيين كخلفية للكانفاس" : "Set as Canvas Background"}</span>
-                  </button>
-
-                  <button
-                    className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5"
-                    onClick={() => {
-                      if (onApplyStockPhoto) onApplyStockPhoto(selectedStock, true);
-                      onClose();
-                    }}
-                  >
-                    <Layers size={14} className="text-teal-400" />
-                    <span>{isAr ? "إضافة كطبقة جديدة فوق التصميم" : "Add as New Layer"}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        </main>
       </div>
+
+      {/* ── 4. Dedicated Full Preview Modal ── */}
+      {previewItem && (
+        <Dialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)}>
+          <DialogContent className="max-w-2xl bg-[#0d1322] border border-slate-700 text-white rounded-2xl p-6" dir={isAr ? "rtl" : "ltr"}>
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-lg font-bold flex items-center justify-between">
+                <span>{previewItem.title}</span>
+                <Badge variant="outline" className="font-mono text-xs text-blue-400 border-blue-400/40">
+                  {previewItem.dims}
+                </Badge>
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="aspect-video w-full rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center mb-5">
+              {previewItem.renderFn && (
+                <LiveThumbCanvas renderFn={previewItem.renderFn} width={1600} height={900} />
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setPreviewItem(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300"
+              >
+                {isAr ? "إغلاق" : "Close"}
+              </button>
+              <button
+                onClick={() => {
+                  previewItem.onApply();
+                  setPreviewItem(null);
+                }}
+                className="px-6 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-600 text-xs font-bold text-white shadow-lg shadow-blue-500/25"
+              >
+                {isAr ? "تطبيق على مساحة العمل" : "Apply to Canvas"}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
+
+export default CreativeLibraryModal;
