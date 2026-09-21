@@ -4,18 +4,23 @@
  */
 
 export type BackdropCategory =
-  | "product"
   | "studio"
+  | "marble"
+  | "wood"
   | "luxury"
+  | "gold"
+  | "glass"
+  | "concrete"
   | "nature"
+  | "mountains"
+  | "ocean"
   | "technology"
-  | "food"
+  | "cyberpunk"
   | "fashion"
-  | "beauty"
-  | "business"
+  | "food"
+  | "product"
   | "abstract"
-  | "3d"
-  | "minimal";
+  | "gradients";
 
 export interface CreativeBackdropPreset {
   id: string;
@@ -28,19 +33,24 @@ export interface CreativeBackdropPreset {
 }
 
 export const CREATIVE_BACKDROP_CATEGORIES: { id: BackdropCategory | "all"; nameAr: string; nameEn: string; icon: string }[] = [
-  { id: "all", nameAr: "الكل", nameEn: "All", icon: "✨" },
-  { id: "product", nameAr: "منتجات", nameEn: "Product", icon: "🛍️" },
+  { id: "all", nameAr: "جميع الخلفيات", nameEn: "All Backdrops", icon: "✨" },
   { id: "studio", nameAr: "استوديو", nameEn: "Studio", icon: "🎬" },
-  { id: "luxury", nameAr: "فخامة ورخام", nameEn: "Luxury", icon: "💎" },
-  { id: "nature", nameAr: "طبيعة وشمس", nameEn: "Nature", icon: "🌿" },
-  { id: "technology", nameAr: "تقنية ونيون", nameEn: "Technology", icon: "⚡" },
-  { id: "food", nameAr: "مأكولات ومقاهي", nameEn: "Food", icon: "☕" },
-  { id: "fashion", nameAr: "أزياء وموضة", nameEn: "Fashion", icon: "👗" },
-  { id: "beauty", nameAr: "عناية وجمال", nameEn: "Beauty", icon: "💄" },
-  { id: "business", nameAr: "أعمال وشركات", nameEn: "Business", icon: "💼" },
-  { id: "abstract", nameAr: "تجريدي سائل", nameEn: "Abstract", icon: "🎨" },
-  { id: "3d", nameAr: "منصات ثلاثية الأبعاد", nameEn: "3D Podium", icon: "📦" },
-  { id: "minimal", nameAr: "مينيمال نقي", nameEn: "Minimal", icon: "⚪" },
+  { id: "marble", nameAr: "رخام", nameEn: "Marble", icon: "🏛️" },
+  { id: "wood", nameAr: "خشب", nameEn: "Wood", icon: "🪵" },
+  { id: "luxury", nameAr: "فخامة", nameEn: "Luxury", icon: "💎" },
+  { id: "gold", nameAr: "ذهبي", nameEn: "Gold", icon: "🪙" },
+  { id: "glass", nameAr: "زجاج", nameEn: "Glass", icon: "🪟" },
+  { id: "concrete", nameAr: "خرسانة", nameEn: "Concrete", icon: "🧱" },
+  { id: "nature", nameAr: "طبيعة", nameEn: "Nature", icon: "🌿" },
+  { id: "mountains", nameAr: "جبال", nameEn: "Mountains", icon: "🏔️" },
+  { id: "ocean", nameAr: "محيط", nameEn: "Ocean", icon: "🌊" },
+  { id: "technology", nameAr: "تقنية", nameEn: "Technology", icon: "⚡" },
+  { id: "cyberpunk", nameAr: "سايبربانك", nameEn: "Cyberpunk", icon: "🌆" },
+  { id: "fashion", nameAr: "أزياء", nameEn: "Fashion", icon: "👗" },
+  { id: "food", nameAr: "مأكولات", nameEn: "Food", icon: "☕" },
+  { id: "product", nameAr: "تصوير منتجات", nameEn: "Product Photography", icon: "🛍️" },
+  { id: "abstract", nameAr: "تجريدي", nameEn: "Abstract", icon: "🎨" },
+  { id: "gradients", nameAr: "تدرجات", nameEn: "Gradients", icon: "🌈" },
 ];
 
 export const CREATIVE_BACKDROPS: CreativeBackdropPreset[] = [
@@ -407,4 +417,513 @@ export const CREATIVE_BACKDROPS: CreativeBackdropPreset[] = [
       ctx.fillRect(0, 0, w, h);
     }
   },
+
+  // 13. Carrara Marble Luxury
+  {
+    id: "luxury-carrara-marble",
+    nameAr: "رخام كرارا إيطالي فاخر مع عروق رمادية",
+    nameEn: "Italian Carrara White Marble",
+    category: "luxury",
+    tags: ["marble", "luxury", "stone", "white", "رخام", "فخامة"],
+    accentColor: "#cbd5e1",
+    render: (ctx, w, h) => {
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, w, h);
+
+      // Veins
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.2);
+      ctx.bezierCurveTo(w * 0.3, h * 0.35, w * 0.6, h * 0.1, w, h * 0.4);
+      ctx.stroke();
+
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.2, 0);
+      ctx.bezierCurveTo(w * 0.35, h * 0.4, w * 0.5, h * 0.7, w * 0.8, h);
+      ctx.stroke();
+
+      // Top soft lighting vignette
+      const rad = ctx.createRadialGradient(w / 2, h * 0.4, 20, w / 2, h * 0.4, w * 0.6);
+      rad.addColorStop(0, "rgba(255,255,255,0.6)");
+      rad.addColorStop(1, "rgba(203,213,225,0.2)");
+      ctx.fillStyle = rad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  },
+
+  // 14. Walnut Wood Tabletop
+  {
+    id: "wood-walnut-tabletop",
+    nameAr: "خشب جوز طبيعي دافئ لعرض المنتجات",
+    nameEn: "Natural Dark Walnut Wood Tabletop",
+    category: "product",
+    tags: ["wood", "tabletop", "warm", "nature", "خشب", "طبيعي"],
+    accentColor: "#78350f",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#451a03");
+      grad.addColorStop(0.5, "#290e02");
+      grad.addColorStop(1, "#180601");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Wood plank lines
+      ctx.strokeStyle = "rgba(120, 53, 15, 0.4)";
+      ctx.lineWidth = 2;
+      for (let y = 0; y < h; y += h * 0.12) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Warm overhead studio spotlight
+      const spot = ctx.createRadialGradient(w / 2, h * 0.4, 10, w / 2, h * 0.4, w * 0.5);
+      spot.addColorStop(0, "rgba(251, 191, 36, 0.22)");
+      spot.addColorStop(1, "transparent");
+      ctx.fillStyle = spot;
+      ctx.fillRect(0, 0, w, h);
+    }
+  },
+
+  // 15. 24K Gold & Obsidian Luxury
+  {
+    id: "luxury-gold-obsidian",
+    nameAr: "ذهب ملكي عيار 24 مع أوبسيديان أسود",
+    nameEn: "24K Gold Leaf & Obsidian Luxury",
+    category: "luxury",
+    tags: ["gold", "luxury", "black", "metallic", "ذهب", "ملكي"],
+    accentColor: "#fbbf24",
+    render: (ctx, w, h) => {
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, "#09090b");
+      bg.addColorStop(0.5, "#18181b");
+      bg.addColorStop(1, "#050507");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      // Gold diagonal ribbons
+      const gold = ctx.createLinearGradient(0, 0, w, h);
+      gold.addColorStop(0, "#d97706");
+      gold.addColorStop(0.3, "#fef08a");
+      gold.addColorStop(0.6, "#f59e0b");
+      gold.addColorStop(1, "#78350f");
+
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.2, h * 0.3);
+      ctx.bezierCurveTo(w * 0.2, h * 0.1, w * 0.6, h * 0.9, w * 1.2, h * 0.7);
+      ctx.stroke();
+
+      // Golden shimmer particles
+      ctx.fillStyle = "#fbbf24";
+      for (let i = 0; i < 24; i++) {
+        const px = (Math.sin(i * 99) * 0.5 + 0.5) * w;
+        const py = (Math.cos(i * 33) * 0.5 + 0.5) * h;
+        const pr = (i % 3) + 1.5;
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  },
+
+  // 16. Frosted Glass Refraction
+  {
+    id: "minimal-frosted-glass",
+    nameAr: "زجاج مثلج مع انكسار ضوئي ناعم (Glassmorphism)",
+    nameEn: "Frosted Studio Glassmorphism",
+    category: "minimal",
+    tags: ["glass", "frosted", "minimal", "modern", "زجاج", "عصري"],
+    accentColor: "#38bdf8",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "#e0f2fe");
+      grad.addColorStop(0.5, "#f0f9ff");
+      grad.addColorStop(1, "#bae6fd");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Frosted geometric panels
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.roundRect(w * 0.1, h * 0.15, w * 0.8, h * 0.7, 16);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+
+  // 17. Cyberpunk Grid & Neon Horizon
+  {
+    id: "tech-cyberpunk-grid",
+    nameAr: "شبكة سايبربانك مستقبلية بأفق نيون",
+    nameEn: "Cyberpunk Synthwave Neon Grid",
+    category: "technology",
+    tags: ["cyberpunk", "neon", "grid", "synthwave", "نيون", "مستقبل"],
+    accentColor: "#ec4899",
+    render: (ctx, w, h) => {
+      ctx.fillStyle = "#09090b";
+      ctx.fillRect(0, 0, w, h);
+
+      // Neon horizon glow
+      const glow = ctx.createLinearGradient(0, h * 0.3, 0, h * 0.6);
+      glow.addColorStop(0, "rgba(236, 72, 153, 0.8)");
+      glow.addColorStop(1, "rgba(6, 182, 212, 0.2)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, h * 0.45, w, h * 0.1);
+
+      // Perspective grid
+      ctx.strokeStyle = "rgba(6, 182, 212, 0.45)";
+      ctx.lineWidth = 1.5;
+      const horizonY = h * 0.52;
+      for (let x = -w; x < w * 2; x += w * 0.15) {
+        ctx.beginPath();
+        ctx.moveTo(w / 2, horizonY);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = horizonY; y < h; y += (h - horizonY) / 8) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    }
+  },
+
+  // 18. Vibrant Sunset Aura Gradient
+  {
+    id: "abstract-sunset-aura",
+    nameAr: "تدرج هالة الغروب الحريري (Aura Mesh)",
+    nameEn: "Sunset Aura Vibrant Mesh Gradient",
+    category: "gradients",
+    tags: ["gradient", "aura", "mesh", "sunset", "تدرج", "غروب"],
+    accentColor: "#f97316",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "#4f46e5");
+      grad.addColorStop(0.35, "#ec4899");
+      grad.addColorStop(0.7, "#f97316");
+      grad.addColorStop(1, "#facc15");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Soft white central luminous diffusion
+      const rad = ctx.createRadialGradient(w * 0.4, h * 0.45, 10, w * 0.4, h * 0.45, w * 0.5);
+      rad.addColorStop(0, "rgba(255,255,255,0.4)");
+      rad.addColorStop(1, "transparent");
+      ctx.fillStyle = rad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  },
+
+  // 19. Italian Carrara White Marble
+  {
+    id: "marble-carrara-white",
+    nameAr: "رخام كرارا إيطالي فاخر مع عروق رمادية",
+    nameEn: "Italian Carrara White Veined Marble",
+    category: "marble",
+    tags: ["marble", "white", "luxury", "stone", "رخام", "إيطالي"],
+    accentColor: "#94a3b8",
+    render: (ctx, w, h) => {
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.2);
+      ctx.bezierCurveTo(w * 0.3, h * 0.35, w * 0.6, h * 0.15, w, h * 0.4);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.2, 0);
+      ctx.bezierCurveTo(w * 0.4, h * 0.5, w * 0.7, h * 0.6, w * 0.9, h);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(203, 213, 225, 0.4)";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.1, h);
+      ctx.bezierCurveTo(w * 0.5, h * 0.7, w * 0.4, h * 0.3, w, h * 0.1);
+      ctx.stroke();
+    }
+  },
+
+  // 20. Dark Marquina Gold Veined Marble
+  {
+    id: "marble-black-gold",
+    nameAr: "رخام ماركينا أسود مع عروق ذهبية",
+    nameEn: "Black Marquina Marble with Golden Veins",
+    category: "marble",
+    tags: ["marble", "black", "gold", "luxury", "رخام", "أسود"],
+    accentColor: "#eab308",
+    render: (ctx, w, h) => {
+      ctx.fillStyle = "#09090b";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.55)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.4);
+      ctx.bezierCurveTo(w * 0.35, h * 0.2, w * 0.65, h * 0.7, w, h * 0.5);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.15, h);
+      ctx.bezierCurveTo(w * 0.35, h * 0.6, w * 0.7, h * 0.3, w * 0.85, 0);
+      ctx.stroke();
+    }
+  },
+
+  // 21. Natural Walnut Wood
+  {
+    id: "wood-walnut-warm",
+    nameAr: "خشب الجوز الدافئ مع حبيبات خشبية طبيعية",
+    nameEn: "Warm Natural Walnut Wood Grain",
+    category: "wood",
+    tags: ["wood", "walnut", "timber", "natural", "خشب", "جوز"],
+    accentColor: "#78350f",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#451a03");
+      grad.addColorStop(0.5, "#78350f");
+      grad.addColorStop(1, "#290e02");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Wood grain rings
+      ctx.strokeStyle = "rgba(254, 243, 199, 0.08)";
+      for (let y = 0; y < h; y += 12) {
+        ctx.lineWidth = Math.random() * 2 + 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(w * 0.3, y + Math.sin(y) * 8, w * 0.7, y - Math.cos(y) * 8, w, y);
+        ctx.stroke();
+      }
+    }
+  },
+
+  // 22. Polished 24K Gold Metal
+  {
+    id: "gold-foil-luxury",
+    nameAr: "لوح ذهب ملكي مصقول عيار 24",
+    nameEn: "Royal 24K Polished Specular Gold",
+    category: "gold",
+    tags: ["gold", "foil", "royal", "metallic", "ذهب", "فخامة"],
+    accentColor: "#fbbf24",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "#b45309");
+      grad.addColorStop(0.25, "#fef08a");
+      grad.addColorStop(0.5, "#d97706");
+      grad.addColorStop(0.75, "#fef9c3");
+      grad.addColorStop(1, "#92400e");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Diagonal sheen lines
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.lineWidth = 18;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.2, h * 0.8);
+      ctx.lineTo(w * 0.8, -h * 0.2);
+      ctx.stroke();
+    }
+  },
+
+  // 23. Frosted Glassmorphism
+  {
+    id: "glass-crystal-frosted",
+    nameAr: "لوح زجاجي بلوري عاكس مع ضوء خلفي ناعم",
+    nameEn: "Frosted Crystal Glassmorphism Backdrop",
+    category: "glass",
+    tags: ["glass", "frosted", "crystal", "blur", "زجاج"],
+    accentColor: "#38bdf8",
+    render: (ctx, w, h) => {
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, "#0f172a");
+      bg.addColorStop(0.5, "#1e293b");
+      bg.addColorStop(1, "#0284c7");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      // Glass plate
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(w * 0.1, h * 0.1, w * 0.8, h * 0.8, 24);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+
+  // 24. Architectural Brutalist Concrete
+  {
+    id: "concrete-brutalist-grey",
+    nameAr: "خرسانة معمارية حديثة بملمس ناعم",
+    nameEn: "Architectural Brutalist Studio Concrete",
+    category: "concrete",
+    tags: ["concrete", "cement", "brutalist", "grey", "خرسانة", "إسمنت"],
+    accentColor: "#64748b",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#cbd5e1");
+      grad.addColorStop(0.5, "#94a3b8");
+      grad.addColorStop(1, "#64748b");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Concrete seams
+      ctx.strokeStyle = "rgba(51, 65, 85, 0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.5, 0);
+      ctx.lineTo(w * 0.5, h);
+      ctx.moveTo(0, h * 0.5);
+      ctx.lineTo(w, h * 0.5);
+      ctx.stroke();
+    }
+  },
+
+  // 25. Misty Alpine Mountain Ridge
+  {
+    id: "mountains-misty-ridge",
+    nameAr: "سلسلة جبال الألب مع ضباب شتوي ساحر",
+    nameEn: "Misty Alpine Mountain Ridge & Sunbeam",
+    category: "mountains",
+    tags: ["mountains", "alps", "mist", "nature", "جبال", "ضباب"],
+    accentColor: "#0284c7",
+    render: (ctx, w, h) => {
+      const sky = ctx.createLinearGradient(0, 0, 0, h * 0.7);
+      sky.addColorStop(0, "#38bdf8");
+      sky.addColorStop(1, "#f1f5f9");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      // Distant mountain
+      ctx.fillStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.65);
+      ctx.lineTo(w * 0.35, h * 0.28);
+      ctx.lineTo(w * 0.7, h * 0.65);
+      ctx.lineTo(0, h * 0.65);
+      ctx.fill();
+
+      // Foreground sharp peak
+      ctx.fillStyle = "#334155";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.2, h);
+      ctx.lineTo(w * 0.65, h * 0.38);
+      ctx.lineTo(w, h * 0.85);
+      ctx.lineTo(w, h);
+      ctx.fill();
+    }
+  },
+
+  // 26. Turquoise Ocean Horizon
+  {
+    id: "ocean-turquoise-deep",
+    nameAr: "أمواج المحيط الفيروزية مع لمعان الشمس",
+    nameEn: "Turquoise Deep Ocean Waters & Shimmer",
+    category: "ocean",
+    tags: ["ocean", "sea", "water", "turquoise", "محيط", "بحر"],
+    accentColor: "#06b6d4",
+    render: (ctx, w, h) => {
+      const sea = ctx.createLinearGradient(0, 0, 0, h);
+      sea.addColorStop(0, "#0891b2");
+      sea.addColorStop(0.4, "#06b6d4");
+      sea.addColorStop(0.8, "#0e7490");
+      sea.addColorStop(1, "#164e63");
+      ctx.fillStyle = sea;
+      ctx.fillRect(0, 0, w, h);
+
+      // Water ripples
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.lineWidth = 2;
+      for (let y = h * 0.2; y < h; y += 28) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(w * 0.25, y - 6, w * 0.75, y + 6, w, y);
+        ctx.stroke();
+      }
+    }
+  },
+
+  // 27. Cyberpunk Neo Tokyo Neon
+  {
+    id: "cyberpunk-neo-tokyo",
+    nameAr: "سايبربانك نيو طوكيو مع أضواء نيون أرجوانية",
+    nameEn: "Cyberpunk Neo Tokyo Violet & Cyan Neon",
+    category: "cyberpunk",
+    tags: ["cyberpunk", "neon", "tokyo", "futuristic", "سايبربانك", "نيون"],
+    accentColor: "#d946ef",
+    render: (ctx, w, h) => {
+      ctx.fillStyle = "#05050a";
+      ctx.fillRect(0, 0, w, h);
+
+      // Vertical neon streaks
+      const grad1 = ctx.createLinearGradient(0, 0, 0, h);
+      grad1.addColorStop(0, "transparent");
+      grad1.addColorStop(0.5, "#d946ef");
+      grad1.addColorStop(1, "transparent");
+      ctx.fillStyle = grad1;
+      ctx.fillRect(w * 0.2, 0, 6, h);
+
+      const grad2 = ctx.createLinearGradient(0, 0, 0, h);
+      grad2.addColorStop(0, "transparent");
+      grad2.addColorStop(0.5, "#06b6d4");
+      grad2.addColorStop(1, "transparent");
+      ctx.fillStyle = grad2;
+      ctx.fillRect(w * 0.75, 0, 8, h);
+
+      // Ambient radial bloom
+      const bloom = ctx.createRadialGradient(w * 0.5, h * 0.5, 20, w * 0.5, h * 0.5, w * 0.6);
+      bloom.addColorStop(0, "rgba(217, 70, 239, 0.22)");
+      bloom.addColorStop(1, "transparent");
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, w, h);
+    }
+  },
+
+  // 28. Soft Pastel Gradients
+  {
+    id: "gradients-pastel-blush",
+    nameAr: "تدرج باستيل وردي وخوخي فائق النعومة",
+    nameEn: "Soft Pastel Peach & Lavender Mesh",
+    category: "gradients",
+    tags: ["gradient", "pastel", "peach", "lavender", "تدرج", "باستيل"],
+    accentColor: "#f472b6",
+    render: (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "#fed7aa");
+      grad.addColorStop(0.5, "#fbcfe8");
+      grad.addColorStop(1, "#c7d2fe");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+];
+
+export const EXPANDED_BACKDROP_THEMES = [
+  { id: "all", nameAr: "الكل", nameEn: "All", icon: "✨" },
+  { id: "marble", nameAr: "رخام فاخر", nameEn: "Marble", icon: "🏛️" },
+  { id: "wood", nameAr: "خشب طبيعي", nameEn: "Wood", icon: "🪵" },
+  { id: "gold", nameAr: "ذهب وفخامة", nameEn: "Gold & Luxury", icon: "👑" },
+  { id: "glass", nameAr: "زجاج عصري", nameEn: "Glassmorphism", icon: "🪟" },
+  { id: "cyberpunk", nameAr: "سايبربانك ونيون", nameEn: "Cyberpunk", icon: "⚡" },
+  { id: "gradient", nameAr: "تدرجات لونية", nameEn: "Gradients", icon: "🌈" },
+  { id: "studio", nameAr: "استوديو سينمائي", nameEn: "Studio", icon: "🎬" },
+  { id: "product", nameAr: "منصات منتجات", nameEn: "Product Podiums", icon: "🛍️" },
+  { id: "nature", nameAr: "طبيعة وشمس", nameEn: "Nature", icon: "🌿" },
+  { id: "minimal", nameAr: "مينيمال نقي", nameEn: "Minimal", icon: "⚪" },
 ];

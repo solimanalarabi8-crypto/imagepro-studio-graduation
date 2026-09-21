@@ -5364,5 +5364,68 @@ html.light-theme .sidebar-studio-btn-ai {
   box-shadow: 0 0 12px rgba(45, 212, 191, 0.3);
 }
 
+/* ─── Premium "＋ New Design" Top Bar Button ─── */
+.premium-new-design-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 15px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 14px rgba(13, 148, 136, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-inline: 10px;
+  user-select: none;
+  white-space: nowrap;
+}
+.premium-new-design-btn:hover {
+  transform: translateY(-1.5px) scale(1.03);
+  box-shadow: 0 0 22px rgba(45, 212, 191, 0.7), 0 4px 14px rgba(6, 182, 212, 0.5);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.premium-new-design-btn:active {
+  transform: scale(0.97);
+}
+
+.studio-hero-pill-newdesign {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(20, 184, 166, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.studio-hero-pill-newdesign:hover {
+  box-shadow: 0 0 20px rgba(45, 212, 191, 0.7);
+}
+
+/* ─── New Design Modal Window ─── */
+.new-design-modal-window {
+  width: 95vw;
+  max-width: 980px;
+  background: #0b1118;
+  border: 1px solid rgba(45, 212, 191, 0.25);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(13, 148, 136, 0.15);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* ─── Share Project Modal Window ─── */
+.share-project-modal {
+  width: 90vw;
+  max-width: 520px;
+  background: #0f172a;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+
 
 

@@ -51,6 +51,11 @@ import { CanvasContextMenu } from "@/components/CanvasContextMenu";
 import { ProjectsDashboardModal } from "@/components/ProjectsDashboardModal";
 import { VersionHistoryModal } from "@/components/VersionHistoryModal";
 import { CreativeLibraryModal } from "@/components/CreativeLibraryModal";
+import { CreativePlatformView } from "@/components/CreativePlatformView";
+import { NewDesignModal } from "@/components/NewDesignModal";
+import { ShareProjectModal } from "@/components/ShareProjectModal";
+import { STOCK_PHOTOS, StockPhotoItem } from "@/lib/stock-photos-library";
+import { ASSET_GRAPHICS } from "@/lib/assets-library";
 import { WatermarkModal, type WatermarkOptions } from "@/components/WatermarkModal";
 import { MultiSizeExportModal } from "@/components/MultiSizeExportModal";
 import {
@@ -666,6 +671,8 @@ export default function Home() {
   const [isProjectsDashboardOpen, setIsProjectsDashboardOpen] = useState(false);
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const [isCreativeLibraryOpen, setIsCreativeLibraryOpen] = useState(false);
+  const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
+  const [shareProjectTarget, setShareProjectTarget] = useState<StoredProjectMetadata | null>(null);
   const [isWatermarkOpen, setIsWatermarkOpen] = useState(false);
   const [isMultiExportOpen, setIsMultiExportOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string>(() => "proj-" + Date.now());
@@ -2406,6 +2413,104 @@ export default function Home() {
     };
     setShapes((prev) => [...prev, newShape]);
     setStatus(currentLang === "ar" ? `تمت إضافة العنصر: ${asset.nameAr}` : `Added graphic: ${asset.nameEn}`);
+  };
+
+  const handleApplyStockPhoto = (photo: StockPhotoItem, asLayer: boolean) => {
+    const off = document.createElement("canvas");
+    off.width = photo.width;
+    off.height = photo.height;
+    const ctx = off.getContext("2d");
+    if (ctx) {
+      photo.render(ctx, photo.width, photo.height);
+    }
+    const dataUrl = off.toDataURL("image/png");
+
+    if (asLayer) {
+      const newLayerId = `layer-${Date.now()}`;
+      const newLayer: LayerInfo = {
+        id: newLayerId,
+        name: currentLang === "ar" ? `صورة: ${photo.nameAr}` : `Photo: ${photo.nameEn}`,
+        visible: true,
+        opacity: 100,
+        blendMode: "normal",
+        kind: "paint",
+        color: photo.dominantColor
+      };
+      setLayers((prev) => [...prev, newLayer]);
+      setSelectedLayer(newLayerId);
+      setStatus(currentLang === "ar" ? `تمت إضافة صورة ${photo.nameAr} كطبقة جديدة` : `Added ${photo.nameEn} as layer`);
+    } else {
+      setImageSize({ width: photo.width, height: photo.height });
+      setImageSrc(dataUrl);
+      setFloatingSubject(null);
+      setStrokes([]);
+      setLayers([
+        {
+          id: "background",
+          name: currentLang === "ar" ? `خلفية: ${photo.nameAr}` : `Background: ${photo.nameEn}`,
+          visible: true,
+          opacity: 100,
+          blendMode: "normal",
+          kind: "background",
+          color: photo.dominantColor
+        }
+      ]);
+      setSelectedLayer("background");
+      setTimeout(fitToScreen, 100);
+      setStatus(currentLang === "ar" ? `تم تعيين صورة: ${photo.nameAr} كخلفية للكانفاس` : `Set backdrop: ${photo.nameEn}`);
+    }
+  };
+
+  const handleCreateNewProjectFromModal = (opts: {
+    width: number;
+    height: number;
+    background: "transparent" | "white" | "black" | string;
+    templateName?: string;
+  }) => {
+    const w = opts.width;
+    const h = opts.height;
+    setImageSize({ width: w, height: h });
+
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext("2d");
+    if (ctx) {
+      if (opts.background === "white") {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+      } else if (opts.background === "black") {
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, w, h);
+      } else if (opts.background !== "transparent") {
+        ctx.fillStyle = opts.background;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+    const bgData = off.toDataURL("image/png");
+    setImageSrc(bgData);
+    setFloatingSubject(null);
+    setStrokes([]);
+    setShapes([]);
+    setTextElements([]);
+
+    const newProjId = "proj-" + Date.now();
+    setCurrentProjectId(newProjId);
+    setImageName(opts.templateName || (currentLang === "ar" ? "مشروع جديد" : "New Project"));
+    setLayers([
+      {
+        id: "background",
+        name: opts.templateName || (currentLang === "ar" ? "الخلفية" : "Background"),
+        visible: true,
+        opacity: 100,
+        blendMode: "normal",
+        kind: "background",
+        color: opts.background === "white" ? "#ffffff" : opts.background === "black" ? "#000000" : "#2dd4bf"
+      }
+    ]);
+    setSelectedLayer("background");
+    setTimeout(fitToScreen, 100);
+    setStatus(currentLang === "ar" ? `تم بدء تصميم جديد: ${opts.templateName || `${w}×${h}`}` : `Created design: ${opts.templateName || `${w}×${h}`}`);
   };
 
   // Phase 7: Watermark and Multi-Size Export Handlers
@@ -5400,6 +5505,18 @@ export default function Home() {
               </div>
             </div>
 
+            {/* 1. زر Premium واضح في الشريط العلوي: "＋ تصميم جديد" */}
+            <button
+              type="button"
+              className="premium-new-design-btn"
+              onClick={() => setIsNewDesignModalOpen(true)}
+              title={currentLang === "ar" ? "＋ تصميم جديد (جميع المقاسات والمنصات والتصنيفات)" : "＋ New Design (All Sizes & Categories)"}
+              data-testid="premium-new-design-btn"
+            >
+              <Plus size={14} className="text-white" />
+              <span>{currentLang === "ar" ? "＋ تصميم جديد" : "＋ New Design"}</span>
+            </button>
+
             <nav className="command-nav" aria-label="القائمة الرئيسية">
               {/* 1. قائمة ملف File Menu */}
               <div className="app-dropdown-container">
@@ -5412,8 +5529,12 @@ export default function Home() {
                 </button>
                 {activeMenu === "file" && (
                   <div className="app-dropdown-menu">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsNewDesignModalOpen(true); }}>
+                      <span className="app-menu-item-left"><Sparkles size={14} className="text-teal-400" /> ＋ تصميم جديد (Canva Suite)...</span>
+                      <span className="app-menu-badge">جديد</span>
+                    </button>
                     <button className="app-menu-item" onClick={() => { setActiveMenu(null); setNewProjectOpen(true); }}>
-                      <span className="app-menu-item-left"><FilePlus size={14} /> مشروع جديد...</span>
+                      <span className="app-menu-item-left"><FilePlus size={14} /> مشروع فارغ...</span>
                       <span className="app-menu-badge">Ctrl+N</span>
                     </button>
                     <button className="app-menu-item" onClick={() => { setActiveMenu(null); uploadRef.current?.click(); }}>
@@ -5712,6 +5833,24 @@ export default function Home() {
           {/* ─── الطبقة الثانية (Tier 2): شريط استوديو الإبداع (Studio Hero Ribbon) ─── */}
           <div className="command-bar-tier2">
             <div className="tier2-actions-left">
+              {/* 0. زر تصميم جديد المميز (Canva Grade Hero New Design Button) */}
+              <button
+                onClick={() => setIsNewDesignModalOpen(true)}
+                className="studio-hero-pill studio-hero-pill-new-design"
+                style={{
+                  background: "linear-gradient(135deg, #06b6d4 0%, #14b8a6 100%)",
+                  color: "#020617",
+                  fontWeight: 700,
+                  boxShadow: "0 2px 10px rgba(6, 182, 212, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)"
+                }}
+                title={currentLang === "ar" ? "بدء تصميم جديد بجميع المقاسات والمنصات" : "Create New Design"}
+                data-testid="hero-new-design-btn"
+              >
+                <Plus size={15} strokeWidth={2.5} />
+                <span>{currentLang === "ar" ? "＋ تصميم جديد" : "＋ New Design"}</span>
+              </button>
+
               {/* 1. المكتبة الإبداعية الشاملة (Royal Purple Gradient - Pixelora Grade) */}
               <button
                 onClick={() => setIsCreativeLibraryOpen(true)}
@@ -6447,6 +6586,28 @@ export default function Home() {
                 event.preventDefault();
                 dragCounterRef.current = 0;
                 setIsDragOverStage(false);
+
+                // Check internal creative drag & drop (from Creative Library modal or sidebar)
+                const rawJson = event.dataTransfer.getData("application/json");
+                if (rawJson) {
+                  try {
+                    const data = JSON.parse(rawJson);
+                    if (data.type === "asset") {
+                      const asset = ASSET_GRAPHICS.find((a) => a.id === data.assetId);
+                      if (asset) {
+                        handleAddAssetGraphic(asset);
+                        return;
+                      }
+                    } else if (data.type === "stock-photo") {
+                      const photo = STOCK_PHOTOS.find((p) => p.id === data.photoId);
+                      if (photo) {
+                        handleApplyStockPhoto(photo, true);
+                        return;
+                      }
+                    }
+                  } catch (err) {}
+                }
+
                 const file = event.dataTransfer.files[0];
                 if (!file) return;
 
@@ -8932,7 +9093,7 @@ export default function Home() {
           onOpenProject={handleOpenRegisteredProject}
           onNewProject={() => {
             setIsProjectsDashboardOpen(false);
-            setIsCreativeLibraryOpen(true);
+            setIsNewDesignModalOpen(true);
           }}
           onImportProjectFile={() => projectFileInputRef.current?.click()}
           onDuplicateProject={handleDuplicateRegisteredProject}
@@ -8942,6 +9103,10 @@ export default function Home() {
           onRestoreFromTrash={handleRestoreProjectFromTrash}
           onPermanentDelete={handlePermanentDeleteProject}
           onExportProjectFile={handleExportRegisteredProject}
+          onShareProject={(proj) => setShareProjectTarget(proj)}
+          onViewVersionHistory={(_id: string) => {
+            setIsVersionHistoryOpen(true);
+          }}
           lang={currentLang}
         />
 
@@ -8956,17 +9121,38 @@ export default function Home() {
           lang={currentLang}
         />
 
-        {/* Phase 4 & 5: Creative Library Hub (Backgrounds, Templates, Assets) */}
+        {/* Phase 4 & 5: Creative Library Hub (Backgrounds, Templates, Assets, Stock Photos) */}
         <CreativeLibraryModal
           isOpen={isCreativeLibraryOpen}
           onClose={() => setIsCreativeLibraryOpen(false)}
           onApplyBackground={handleApplyCreativeBackground}
           onApplyTemplate={handleApplyEditableTemplate}
           onAddAssetLayer={handleAddAssetGraphic}
+          onApplyStockPhoto={handleApplyStockPhoto}
           onOpenProject={handleOpenRegisteredProject}
           projects={registeredProjects}
           lang={currentLang}
         />
+
+        {/* Canva-Grade New Design Modal */}
+        <NewDesignModal
+          isOpen={isNewDesignModalOpen}
+          onClose={() => setIsNewDesignModalOpen(false)}
+          onCreateNewProject={handleCreateNewProjectFromModal}
+          onOpenTemplates={() => setIsTemplatesModalOpen(true)}
+          lang={currentLang}
+        />
+
+        {/* Canva-Grade Share & Export Project Modal */}
+        {shareProjectTarget && (
+          <ShareProjectModal
+            isOpen={!!shareProjectTarget}
+            onClose={() => setShareProjectTarget(null)}
+            project={shareProjectTarget}
+            onExportFile={handleExportRegisteredProject}
+            lang={currentLang}
+          />
+        )}
 
         {/* Phase 7: Watermark Studio Modal */}
         <WatermarkModal
