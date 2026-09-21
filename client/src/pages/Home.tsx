@@ -28,7 +28,7 @@ import {
   PaintBucket, PanelRight, PanelRightClose, Pencil, Plus, Redo2, RefreshCw, RotateCcw, RotateCw, Save, Scale, Settings2,
   SlidersHorizontal, Sparkles, Square, Stamp, CircleDot, Crosshair, SunMedium, TextCursorInput, Triangle, Type, Undo2, Upload, WandSparkles, X, ZoomIn,
   ChevronsDown, ChevronsUp, Copy, Trash2, FlipHorizontal, FlipVertical,
-  AlignLeft, AlignCenter, AlignRight, Magnet, Ruler,
+  AlignLeft, AlignCenter, AlignRight, Magnet, Ruler, History, Search,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -46,6 +46,29 @@ import { TemplatesModal } from "@/components/TemplatesModal";
 import { BlendModal } from "@/components/BlendModal";
 import { FiltersStudioModal } from "@/components/FiltersStudioModal";
 import { SmartDropHubModal } from "@/components/SmartDropHubModal";
+import { CommandPaletteModal, type CommandItem } from "@/components/CommandPaletteModal";
+import { CanvasContextMenu } from "@/components/CanvasContextMenu";
+import { ProjectsDashboardModal } from "@/components/ProjectsDashboardModal";
+import { VersionHistoryModal } from "@/components/VersionHistoryModal";
+import { CreativeLibraryModal } from "@/components/CreativeLibraryModal";
+import { WatermarkModal, type WatermarkOptions } from "@/components/WatermarkModal";
+import { MultiSizeExportModal } from "@/components/MultiSizeExportModal";
+import {
+  saveAutosaveRecovery,
+  getAutosaveRecovery,
+  clearAutosaveRecovery,
+  createProjectSnapshot,
+  getProjectSnapshots,
+  deleteProjectSnapshot,
+  updateProjectRegistry,
+  getAllRegisteredProjects,
+  removeProjectFromRegistry,
+  type ProjectSnapshot,
+  type StoredProjectMetadata,
+} from "@/lib/autosave-manager";
+import { type CreativeBackdropPreset } from "@/lib/creative-backgrounds";
+import { type EditableTemplate } from "@/lib/editable-templates";
+import { type AssetGraphicItem } from "@/lib/assets-library";
 import {
   extractDroppedImageMeta,
   calculateFittedPlacement,
@@ -477,6 +500,95 @@ function ToolButton({ tool, active, onClick }: { tool: Tool; active: boolean; on
   );
 }
 
+interface LiveBrushPreviewProps {
+  color: string;
+  size: number;
+  opacity: number;
+  hardness: number;
+  preset: string;
+}
+
+function LiveBrushPreview({ color, size, opacity, hardness, preset }: LiveBrushPreviewProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+
+    const alpha = Math.max(0.15, opacity / 100);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineCap = preset === "pencil" ? "square" : "round";
+    ctx.lineJoin = "round";
+
+    const previewWidth = Math.min(26, Math.max(4, size * 0.42));
+    ctx.lineWidth = previewWidth;
+
+    if (hardness < 70) {
+      ctx.shadowBlur = (100 - hardness) * 0.16;
+      ctx.shadowColor = color;
+    }
+
+    if (preset === "spray") {
+      ctx.fillStyle = color;
+      for (let t = 0; t <= 1; t += 0.015) {
+        const x = 30 + t * (canvas.width - 60);
+        const y = 22 + Math.sin(t * Math.PI * 2) * 4;
+        const count = Math.floor(previewWidth / 2);
+        for (let i = 0; i < count; i++) {
+          const rx = (Math.random() - 0.5) * previewWidth * 1.5;
+          const ry = (Math.random() - 0.5) * previewWidth * 1.5;
+          ctx.beginPath();
+          ctx.arc(x + rx, y + ry, Math.random() * 1.4 + 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      ctx.beginPath();
+      const startX = 30;
+      const endX = canvas.width - 30;
+      const midY = canvas.height / 2;
+      ctx.moveTo(startX, midY);
+      ctx.bezierCurveTo(startX + 60, midY - 8, endX - 60, midY + 8, endX, midY);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, [color, size, opacity, hardness, preset]);
+
+  return (
+    <div className="brush-preview-capsule">
+      <div className="brush-preview-header">
+        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span>🖌️</span>
+          <span>معاينة حية لضربة الفرشاة</span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: "5px", fontFamily: "monospace", fontSize: "10px" }}>
+          <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, display: "inline-block", border: "1px solid rgba(255,255,255,0.3)" }} />
+          <span>{color.toUpperCase()}</span>
+        </span>
+      </div>
+      <div className="brush-preview-canvas-box">
+        <canvas ref={canvasRef} width={260} height={44} style={{ width: "100%", height: "44px", display: "block" }} />
+      </div>
+    </div>
+  );
+}
+
+const BRUSH_PRESETS = [
+  { id: "soft", label: "فرشاة ناعمة", icon: "⭕" },
+  { id: "hard", label: "فرشاة صلبة", icon: "🟣" },
+  { id: "pencil", label: "قلم رصاص", icon: "✏️" },
+  { id: "ink", label: "فرشاة حبر", icon: "✒️" },
+  { id: "blur", label: "فرشاة ضبابية", icon: "☁️" },
+  { id: "spray", label: "فرشاة رذاذ", icon: "✨" },
+];
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasStageRef = useRef<HTMLDivElement>(null);
@@ -547,6 +659,20 @@ export default function Home() {
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isBlendModalOpen, setIsBlendModalOpen] = useState(false);
 
+  // Advanced Professional Upgrades: Modals, Palettes & Menus
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [isProjectsDashboardOpen, setIsProjectsDashboardOpen] = useState(false);
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
+  const [isCreativeLibraryOpen, setIsCreativeLibraryOpen] = useState(false);
+  const [isWatermarkOpen, setIsWatermarkOpen] = useState(false);
+  const [isMultiExportOpen, setIsMultiExportOpen] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string>(() => "proj-" + Date.now());
+  const [projectSnapshots, setProjectSnapshots] = useState<ProjectSnapshot[]>([]);
+  const [registeredProjects, setRegisteredProjects] = useState<StoredProjectMetadata[]>([]);
+  const [autosaveRecoverCandidate, setAutosaveRecoverCandidate] = useState<{ savedAt: number; data: string } | null>(null);
+
   // Section 6 & Canva Visual Suite: Live Filter Previews & Smart Drop Hub State
   const [isFiltersStudioOpen, setIsFiltersStudioOpen] = useState(false);
   const [filterThumbnails, setFilterThumbnails] = useState<Record<FilterMode, string>>({} as Record<FilterMode, string>);
@@ -556,10 +682,57 @@ export default function Home() {
   const [preloadedBlendImage, setPreloadedBlendImage] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
 
+  // Automated Properties Sections State (Pixelora / Canva Style)
+  const [propertiesSection, setPropertiesSection] = useState<"brush" | "color" | "filters" | "ai">("brush");
+  const [activeBrushPreset, setActiveBrushPreset] = useState<string>("soft");
+
   // Global i18n & Theme State
   const [currentLang, setCurrentLang] = useState<Language>("ar");
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
   const t = i18n[currentLang];
+
+  // Automate properties section and tabs to match active tool
+  useEffect(() => {
+    if (activeTool === "brush" || activeTool === "pencil" || activeTool === "eraser" || activeTool === "shape" || activeTool === "bucket" || activeTool === "text") {
+      setPropertiesSection("brush");
+      setActiveTab("properties");
+    } else if (activeTool === "retouch" || activeTool === "wand") {
+      setPropertiesSection("ai");
+      setActiveTab("properties");
+    }
+  }, [activeTool]);
+
+  const handleSelectBrushPreset = (presetId: string) => {
+    setActiveBrushPreset(presetId);
+    setActiveTool("brush");
+    if (presetId === "soft") {
+      setBrushHardness(20);
+      setBrushOpacity(85);
+      setStatus("تم تفعيل الفرشاة الناعمة");
+    } else if (presetId === "hard") {
+      setBrushHardness(100);
+      setBrushOpacity(100);
+      setStatus("تم تفعيل الفرشاة الصلبة");
+    } else if (presetId === "pencil") {
+      setBrushHardness(100);
+      setBrushSize(3);
+      setBrushOpacity(95);
+      setStatus("تم تفعيل قلم الرصاص");
+    } else if (presetId === "ink") {
+      setBrushHardness(90);
+      setBrushSize(8);
+      setBrushOpacity(100);
+      setStatus("تم تفعيل فرشاة الحبر");
+    } else if (presetId === "blur") {
+      setBrushHardness(5);
+      setBrushOpacity(50);
+      setStatus("تم تفعيل الفرشاة الضبابية");
+    } else if (presetId === "spray") {
+      setBrushHardness(35);
+      setBrushOpacity(70);
+      setStatus("تم تفعيل فرشاة الرذاذ");
+    }
+  };
 
   // Point 8: Retouching & Defect Removal State
   const [cloneSource, setCloneSource] = useState<CloneSourcePoint | null>(null);
@@ -1165,6 +1338,12 @@ export default function Home() {
         return;
       }
 
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         saveProject();
@@ -1223,6 +1402,20 @@ export default function Home() {
         event.preventDefault();
         duplicateSelectedLayer();
         return;
+      }
+
+      if (activeTool === "crop") {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          cropToSelection();
+          return;
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          setSelection(null);
+          setActiveTool("select");
+          setStatus(currentLang === "ar" ? "تم إلغاء عملية القص" : "Crop cancelled");
+          return;
+        }
       }
 
       const shortcut = event.key.toUpperCase();
@@ -1552,6 +1745,29 @@ export default function Home() {
     setStatus(`تم تطبيق القص بنسبة ${ratioW}:${ratioH} (${cropW} × ${cropH} بكسل)`);
   };
 
+  const setCropPresetRatio = (ratioW: number, ratioH: number) => {
+    const cw = imageSize.width || canvasRef.current?.width || 1080;
+    const ch = imageSize.height || canvasRef.current?.height || 1080;
+    if (ratioW === 0 || ratioH === 0) {
+      setSelection({ x: 0, y: 0, width: cw, height: ch });
+      setStatus(currentLang === "ar" ? `تم تحديد كامل مساحة الصورة للقص (${cw} × ${ch} بكسل)` : `Full image selected for crop (${cw}x${ch})`);
+      return;
+    }
+    const targetRatio = ratioW / ratioH;
+    let cropW = cw * 0.9;
+    let cropH = cropW / targetRatio;
+    if (cropH > ch * 0.9) {
+      cropH = ch * 0.9;
+      cropW = cropH * targetRatio;
+    }
+    cropW = Math.round(cropW);
+    cropH = Math.round(cropH);
+    const cropX = Math.round((cw - cropW) / 2);
+    const cropY = Math.round((ch - cropH) / 2);
+    setSelection({ x: cropX, y: cropY, width: cropW, height: cropH });
+    setStatus(currentLang === "ar" ? `تم تحديد نسبة القص ${ratioW}:${ratioH} (${cropW} × ${cropH} بكسل) — اضغط تطبيق القص أو Enter` : `Crop ratio ${ratioW}:${ratioH} set`);
+  };
+
   const cropToSelection = () => {
     const canvas = canvasRef.current;
     if (!canvas || !selection || selection.width < 4 || selection.height < 4) {
@@ -1791,6 +2007,835 @@ export default function Home() {
     setLayers(saved.layers || layerSeed);
     setStatus("تم استعادة آخر نسخة محفوظة بنجاح");
   };
+
+  // Phase 3 & 6: Unified Project Package Engine
+  const buildCurrentPackage = useCallback((): ImageProProjectPackage | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return {
+      formatVersion: "1.0.0",
+      appName: "ImagePro Studio",
+      exportedAt: new Date().toISOString(),
+      metadata: {
+        projectName: imageName.trim() || "مشروع ImagePro",
+        width: canvas.width,
+        height: canvas.height,
+        layersCount: layers.length,
+        strokesCount: strokes.length,
+      },
+      state: {
+        imageName: imageName.trim() || "مشروع ImagePro",
+        imageData: canvas.toDataURL("image/png"),
+        brightness,
+        contrast,
+        grayscale,
+        saturation,
+        sepia,
+        invert,
+        hue,
+        exposure,
+        temperature,
+        gamma,
+        colorBalanceR,
+        colorBalanceG,
+        colorBalanceB,
+        thresholdEnabled,
+        threshold,
+        rotation,
+        flipX,
+        flipY,
+        filterMode,
+        filterIntensity,
+        layers: layers as any,
+        strokes,
+        shapes,
+        textElements,
+      },
+    };
+  }, [
+    imageName,
+    layers,
+    strokes,
+    shapes,
+    textElements,
+    brightness,
+    contrast,
+    grayscale,
+    saturation,
+    sepia,
+    invert,
+    hue,
+    exposure,
+    temperature,
+    gamma,
+    colorBalanceR,
+    colorBalanceG,
+    colorBalanceB,
+    thresholdEnabled,
+    threshold,
+    rotation,
+    flipX,
+    flipY,
+    filterMode,
+    filterIntensity,
+  ]);
+
+  const loadPackageIntoStudio = useCallback((pkg: ImageProProjectPackage) => {
+    setImageName(pkg.state.imageName || "مشروع ImagePro");
+    setImageSrc(pkg.state.imageData);
+    setBrightness(pkg.state.brightness ?? 0);
+    setContrast(pkg.state.contrast ?? 0);
+    setGrayscale(pkg.state.grayscale ?? 0);
+    setSaturation(pkg.state.saturation ?? 100);
+    setSepia(pkg.state.sepia ?? 0);
+    setInvert(pkg.state.invert ?? 0);
+    setHue(pkg.state.hue ?? 0);
+    setExposure(pkg.state.exposure ?? 0);
+    setTemperature(pkg.state.temperature ?? 0);
+    setGamma(pkg.state.gamma ?? 1.0);
+    setColorBalanceR(pkg.state.colorBalanceR ?? 0);
+    setColorBalanceG(pkg.state.colorBalanceG ?? 0);
+    setColorBalanceB(pkg.state.colorBalanceB ?? 0);
+    setThresholdEnabled(pkg.state.thresholdEnabled ?? false);
+    setThreshold(pkg.state.threshold ?? 128);
+    setRotation(pkg.state.rotation ?? 0);
+    setFlipX(pkg.state.flipX ?? false);
+    setFlipY(pkg.state.flipY ?? false);
+    setFilterMode(pkg.state.filterMode ?? "none");
+    setFilterIntensity(pkg.state.filterIntensity ?? 50);
+    if (pkg.state.layers) setLayers(pkg.state.layers as any);
+    if (pkg.state.strokes) setStrokes(pkg.state.strokes);
+    if (pkg.state.shapes) setShapes(pkg.state.shapes);
+    if (pkg.state.textElements) setTextElements(pkg.state.textElements);
+    if (pkg.metadata.width && pkg.metadata.height) {
+      setImageSize({ width: pkg.metadata.width, height: pkg.metadata.height });
+    }
+    setTimeout(fitToScreen, 100);
+    setStatus(currentLang === "ar" ? `تم تحميل المشروع "${pkg.metadata.projectName}" بنجاح` : `Loaded project: ${pkg.metadata.projectName}`);
+  }, [currentLang, fitToScreen]);
+
+  // Check crash recovery on startup and sync registry
+  useEffect(() => {
+    const rec = getAutosaveRecovery();
+    if (rec && Date.now() - rec.savedAt < 48 * 60 * 60 * 1000) {
+      setAutosaveRecoverCandidate(rec);
+    }
+    setRegisteredProjects(getAllRegisteredProjects());
+    setProjectSnapshots(getProjectSnapshots(currentProjectId));
+  }, [currentProjectId]);
+
+  // Periodic autosave every 2 minutes
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const pkg = buildCurrentPackage();
+      if (!pkg) return;
+      const json = serializeProjectPackage(pkg);
+      saveAutosaveRecovery(json);
+      updateProjectRegistry({
+        id: currentProjectId,
+        name: imageName.trim() || "مشروع ImagePro",
+        updatedAt: Date.now(),
+        createdAt: Date.now() - 60000,
+        width: pkg.metadata.width,
+        height: pkg.metadata.height,
+        layersCount: pkg.metadata.layersCount,
+        thumbnail: pkg.state.imageData,
+      });
+      setRegisteredProjects(getAllRegisteredProjects());
+    }, 120000);
+    return () => clearInterval(timer);
+  }, [buildCurrentPackage, currentProjectId, imageName]);
+
+  // Phase 3 & 4: Projects Dashboard and Snapshots Handlers
+  const handleOpenRegisteredProject = (projectId: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    const snaps = getProjectSnapshots(projectId);
+    if (snaps.length > 0) {
+      try {
+        const pkg = deserializeProjectPackage(snaps[0].data);
+        loadPackageIntoStudio(pkg);
+        setCurrentProjectId(projectId);
+        setIsProjectsDashboardOpen(false);
+        setIsCreativeLibraryOpen(false);
+        setStatus(`تم فتح المشروع: ${found.name}`);
+      } catch (err) {
+        console.error(err);
+        setStatus("تعذر استرجاع بيانات المشروع");
+      }
+    } else {
+      setStatus("المشروع لا يحتوي على لقطات محفوظة بعد");
+    }
+  };
+
+  const handleDuplicateRegisteredProject = (projectId: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    const newId = "proj-" + Date.now();
+    updateProjectRegistry({
+      ...found,
+      id: newId,
+      name: `${found.name} (نسخة مكررة)`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    const snaps = getProjectSnapshots(projectId);
+    if (snaps.length > 0) {
+      createProjectSnapshot(newId, `${found.name} (نسخة مكررة)`, snaps[0].width, snaps[0].height, snaps[0].layersCount, snaps[0].data, "نسخة مكررة");
+    }
+    setRegisteredProjects(getAllRegisteredProjects());
+    setStatus(`تم تكرار المشروع بنجاح: ${found.name}`);
+  };
+
+  const handleRenameRegisteredProject = (projectId: string, newName: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    updateProjectRegistry({
+      ...found,
+      name: newName,
+      updatedAt: Date.now()
+    });
+    setRegisteredProjects(getAllRegisteredProjects());
+    setStatus("تمت إعادة تسمية المشروع");
+  };
+
+  const handleToggleFavoriteProject = (projectId: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    updateProjectRegistry({
+      ...found,
+      isFavorite: !found.isFavorite
+    });
+    setRegisteredProjects(getAllRegisteredProjects());
+  };
+
+  const handleMoveProjectToTrash = (projectId: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    updateProjectRegistry({
+      ...found,
+      isTrash: true
+    });
+    setRegisteredProjects(getAllRegisteredProjects());
+    setStatus("تم نقل المشروع إلى سلة المحذوفات");
+  };
+
+  const handleRestoreProjectFromTrash = (projectId: string) => {
+    const reg = getAllRegisteredProjects();
+    const found = reg.find(p => p.id === projectId);
+    if (!found) return;
+    updateProjectRegistry({
+      ...found,
+      isTrash: false
+    });
+    setRegisteredProjects(getAllRegisteredProjects());
+    setStatus("تمت استعادة المشروع من سلة المحذوفات");
+  };
+
+  const handlePermanentDeleteProject = (projectId: string) => {
+    removeProjectFromRegistry(projectId);
+    setRegisteredProjects(getAllRegisteredProjects());
+    setStatus("تم حذف المشروع نهائياً");
+  };
+
+  const handleExportRegisteredProject = (projectId: string) => {
+    const snaps = getProjectSnapshots(projectId);
+    if (snaps.length > 0) {
+      downloadFile(snaps[0].data, `${snaps[0].projectName || "project"}.imagepro`, "application/json");
+      setStatus("تم تصدير ملف المشروع (.imagepro)");
+    } else {
+      const pkg = buildCurrentPackage();
+      if (pkg) {
+        const json = serializeProjectPackage(pkg);
+        downloadFile(json, `${imageName.trim() || "project"}.imagepro`, "application/json");
+        setStatus("تم تصدير ملف المشروع (.imagepro)");
+      }
+    }
+  };
+
+  const handleRestoreSnapshot = (snapshot: ProjectSnapshot) => {
+    try {
+      const pkg = deserializeProjectPackage(snapshot.data);
+      loadPackageIntoStudio(pkg);
+      setIsVersionHistoryOpen(false);
+      setStatus(`تمت استعادة لقطة الإصدار: ${snapshot.dateFormatted}`);
+    } catch (err) {
+      console.error(err);
+      setStatus("تعذر استعادة لقطة الإصدار");
+    }
+  };
+
+  const handleCreateManualSnapshot = (note: string) => {
+    const pkg = buildCurrentPackage();
+    if (!pkg) return;
+    const json = serializeProjectPackage(pkg);
+    const snap = createProjectSnapshot(
+      currentProjectId,
+      imageName.trim() || "مشروع ImagePro",
+      pkg.metadata.width,
+      pkg.metadata.height,
+      pkg.metadata.layersCount,
+      json,
+      note
+    );
+    if (snap) {
+      setProjectSnapshots(getProjectSnapshots(currentProjectId));
+      setStatus(`تم إنشاء لقطة إصدار جديدة: "${note}"`);
+    }
+  };
+
+  const handleDeleteSnapshot = (snapshotId: string) => {
+    deleteProjectSnapshot(currentProjectId, snapshotId);
+    setProjectSnapshots(getProjectSnapshots(currentProjectId));
+    setStatus("تم حذف لقطة الإصدار");
+  };
+
+  // Phase 4 & 5: Creative Library Handlers (Backgrounds, Templates, Assets)
+  const handleApplyCreativeBackground = (preset: CreativeBackdropPreset) => {
+    const w = imageSize.width || 1080;
+    const h = imageSize.height || 1080;
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext("2d");
+    if (ctx) {
+      preset.render(ctx, w, h);
+      const bgData = off.toDataURL("image/png");
+      const newLayerId = `layer-bg-${Date.now()}`;
+      setLayers((prev) => [
+        ...prev,
+        {
+          id: newLayerId,
+          name: currentLang === "ar" ? preset.nameAr : preset.nameEn,
+          kind: "image",
+          visible: true,
+          opacity: 100,
+          blendMode: "normal",
+          color: preset.accentColor,
+        },
+      ]);
+      setImageSrc(bgData);
+      setStatus(currentLang === "ar" ? `تم تطبيق خلفية: ${preset.nameAr}` : `Applied backdrop: ${preset.nameEn}`);
+    }
+  };
+
+  const handleApplyEditableTemplate = (tpl: EditableTemplate) => {
+    setImageSize({ width: tpl.width, height: tpl.height });
+    const off = document.createElement("canvas");
+    off.width = tpl.width;
+    off.height = tpl.height;
+    const ctx = off.getContext("2d");
+    if (ctx) {
+      tpl.renderPreview(ctx, tpl.width, tpl.height);
+    }
+    const bgUrl = off.toDataURL("image/png");
+    setImageSrc(bgUrl);
+    setFloatingSubject(null);
+    setStrokes([]);
+    
+    const generatedLayers: LayerInfo[] = [];
+    const generatedShapes: ShapeElement[] = [];
+    const generatedTexts: TextElement[] = [];
+
+    tpl.layers.forEach((l, idx) => {
+      generatedLayers.push({
+        id: l.id,
+        name: l.name,
+        kind: l.kind === "text" ? "paint" : l.kind === "shape" ? "paint" : "background",
+        visible: true,
+        opacity: l.opacity ?? 100,
+        blendMode: "normal",
+        color: l.color || "#2dd4bf",
+      });
+
+      if (l.kind === "shape" && l.shapeType) {
+        generatedShapes.push({
+          id: `shape-${Date.now()}-${idx}`,
+          shape: l.shapeType === "ellipse" ? "ellipse" : "rectangle",
+          x: l.x ?? 50,
+          y: l.y ?? 50,
+          width: l.width ?? 200,
+          height: l.height ?? 100,
+          color: l.color || "#ffffff",
+          widthStroke: 2,
+          fillMode: "fill",
+          layerId: l.id,
+        });
+      }
+
+      if (l.kind === "text" && l.text) {
+        generatedTexts.push({
+          id: `txt-${Date.now()}-${idx}`,
+          text: l.text,
+          x: l.x ?? 100,
+          y: l.y ?? 100,
+          size: l.fontSize ?? 48,
+          color: l.color || "#ffffff",
+          fontFamily: "Tajawal, sans-serif",
+          fontWeight: l.fontWeight === "bold" || l.fontWeight === "900" ? "bold" : "normal",
+          fontStyle: "normal",
+        });
+      }
+    });
+
+    setLayers(generatedLayers);
+    setShapes(generatedShapes);
+    setTextElements(generatedTexts);
+    setTimeout(fitToScreen, 100);
+    setStatus(currentLang === "ar" ? `تم تطبيق القالب الحي: ${tpl.nameAr}` : `Applied live template: ${tpl.nameEn}`);
+  };
+
+  const handleAddAssetGraphic = (asset: AssetGraphicItem) => {
+    const centerPt = { x: (imageSize.width || 800) / 2 - 80, y: (imageSize.height || 600) / 2 - 40 };
+    const newShape: ShapeElement = {
+      id: `asset-${Date.now()}`,
+      shape: "rectangle",
+      x: centerPt.x,
+      y: centerPt.y,
+      width: 160,
+      height: 80,
+      color: "#2dd4bf",
+      widthStroke: 2,
+      fillMode: "fill",
+      layerId: selectedLayer || "background",
+    };
+    setShapes((prev) => [...prev, newShape]);
+    setStatus(currentLang === "ar" ? `تمت إضافة العنصر: ${asset.nameAr}` : `Added graphic: ${asset.nameEn}`);
+  };
+
+  // Phase 7: Watermark and Multi-Size Export Handlers
+  const handleApplyWatermark = (options: WatermarkOptions) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.save();
+    ctx.globalAlpha = options.opacity / 100;
+
+    if (options.type === "text") {
+      ctx.font = `bold ${options.fontSize}px Tajawal, sans-serif`;
+      ctx.fillStyle = options.color;
+
+      if (options.isTiled) {
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(-Math.PI / 6);
+        ctx.translate(-w / 2, -h / 2);
+        for (let x = -w; x < w * 2; x += 300) {
+          for (let y = -h; y < h * 2; y += 150) {
+            ctx.fillText(options.text, x, y);
+          }
+        }
+      } else {
+        const textMetrics = ctx.measureText(options.text);
+        const tw = textMetrics.width;
+        let x = 40;
+        let y = 60;
+        const pad = 40;
+
+        switch (options.position) {
+          case "top-left": x = pad; y = pad + options.fontSize; break;
+          case "top-center": x = (w - tw) / 2; y = pad + options.fontSize; break;
+          case "top-right": x = w - tw - pad; y = pad + options.fontSize; break;
+          case "middle-left": x = pad; y = h / 2; break;
+          case "center": x = (w - tw) / 2; y = h / 2; break;
+          case "middle-right": x = w - tw - pad; y = h / 2; break;
+          case "bottom-left": x = pad; y = h - pad; break;
+          case "bottom-center": x = (w - tw) / 2; y = h - pad; break;
+          case "bottom-right": default: x = w - tw - pad; y = h - pad; break;
+        }
+        ctx.fillText(options.text, x, y);
+      }
+    }
+    ctx.restore();
+    setImageSrc(canvas.toDataURL("image/png"));
+    setStatus(currentLang === "ar" ? "تم تثبيت العلامة المائية على التصميم بنجاح" : "Watermark applied successfully");
+  };
+
+  const handleExecuteMultiExport = (options: {
+    format: "png" | "jpeg" | "webp";
+    quality: number;
+    selectedSizes: { width: number; height: number; suffix: string }[];
+  }) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    options.selectedSizes.forEach((size, idx) => {
+      setTimeout(() => {
+        const off = document.createElement("canvas");
+        off.width = size.width;
+        off.height = size.height;
+        const ctx = off.getContext("2d");
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(canvas, 0, 0, size.width, size.height);
+
+        const mime = options.format === "png" ? "image/png" : options.format === "jpeg" ? "image/jpeg" : "image/webp";
+        const q = options.format === "png" ? undefined : options.quality / 100;
+        const dataUrl = off.toDataURL(mime, q);
+
+        const link = document.createElement("a");
+        link.download = `${imageName.trim() || "imagepro"}_${size.suffix}.${options.format}`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, idx * 250);
+    });
+
+    setStatus(currentLang === "ar" ? `تم بدء تصدير ${options.selectedSizes.length} أحجام بصيغة ${options.format.toUpperCase()}` : `Exporting ${options.selectedSizes.length} sizes in ${options.format.toUpperCase()}`);
+  };
+
+  const exportSelectedLayer = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const off = document.createElement("canvas");
+    off.width = canvas.width;
+    off.height = canvas.height;
+    const ctx = off.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(canvas, 0, 0);
+    const data = off.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = `layer_${selectedLayer || "active"}.png`;
+    link.href = data;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setStatus(currentLang === "ar" ? "تم تصدير الطبقة المحددة بصيغة PNG شفافة" : "Exported active layer as PNG");
+  };
+
+  // Phase 2: Dynamic Command Palette Index
+  const commandList: CommandItem[] = useMemo(() => {
+    const list: CommandItem[] = [
+      {
+        id: "new-design",
+        titleAr: "المكتبة الإبداعية الشاملة (قوالب، خلفيات، أصول)",
+        titleEn: "Creative Library Hub",
+        categoryAr: "إبداعي",
+        categoryEn: "Creative",
+        shortcut: "Ctrl+N",
+        icon: <Sparkles size={16} />,
+        action: () => setIsCreativeLibraryOpen(true),
+        keywords: ["new", "template", "library", "جديد", "قالب", "مكتبة"]
+      },
+      {
+        id: "open-image",
+        titleAr: "فتح صورة من الجهاز",
+        titleEn: "Open Image File",
+        categoryAr: "ملف",
+        categoryEn: "File",
+        shortcut: "Ctrl+O",
+        icon: <FolderOpen size={16} />,
+        action: () => uploadRef.current?.click(),
+        keywords: ["open", "upload", "فتح", "رفع"]
+      },
+      {
+        id: "save-project",
+        titleAr: "حفظ المشروع محلياً",
+        titleEn: "Save Project Locally",
+        categoryAr: "ملف",
+        categoryEn: "File",
+        shortcut: "Ctrl+S",
+        icon: <Save size={16} />,
+        action: saveProject,
+        keywords: ["save", "حفظ"]
+      },
+      {
+        id: "projects-dashboard",
+        titleAr: "لوحة المشاريع المحفوظة",
+        titleEn: "Projects Dashboard",
+        categoryAr: "ملف",
+        categoryEn: "File",
+        icon: <Folder size={16} />,
+        action: () => setIsProjectsDashboardOpen(true),
+        keywords: ["projects", "dashboard", "مشاريع", "لوحة"]
+      },
+      {
+        id: "version-history",
+        titleAr: "سجل الإصدارات والنسخ السابقة",
+        titleEn: "Version History & Snapshots",
+        categoryAr: "ملف",
+        categoryEn: "File",
+        icon: <History size={16} />,
+        action: () => setIsVersionHistoryOpen(true),
+        keywords: ["version", "history", "سجل", "اصدارات"]
+      },
+      {
+        id: "watermark-studio",
+        titleAr: "استوديو العلامة المائية",
+        titleEn: "Watermark Studio",
+        categoryAr: "تصدير",
+        categoryEn: "Export",
+        icon: <Stamp size={16} />,
+        action: () => setIsWatermarkOpen(true),
+        keywords: ["watermark", "شعار", "علامة مائية"]
+      },
+      {
+        id: "multi-size-export",
+        titleAr: "تصدير بأحجام متعددة (Multi-Size Export)",
+        titleEn: "Multi-Size Export",
+        categoryAr: "تصدير",
+        categoryEn: "Export",
+        icon: <Download size={16} />,
+        action: () => setIsMultiExportOpen(true),
+        keywords: ["export", "multi", "تصدير", "ريتينا", "سوشيال"]
+      },
+      {
+        id: "magic-ai-cutout",
+        titleAr: "الذكاء الاصطناعي — عزل المحتوى الصافي (Magic Cutout)",
+        titleEn: "Magic AI Cutout Studio",
+        categoryAr: "ذكاء اصطناعي",
+        categoryEn: "AI",
+        icon: <WandSparkles size={16} />,
+        action: () => handlePureContentCutout(),
+        keywords: ["ai", "cutout", "remove background", "عزل", "تفريغ"]
+      },
+      {
+        id: "blend-studio",
+        titleAr: "استوديو دمج الصورتين باحترافية",
+        titleEn: "Two-Image Blend Studio",
+        categoryAr: "إبداعي",
+        categoryEn: "Creative",
+        icon: <ImageIcon size={16} />,
+        action: () => setIsBlendModalOpen(true),
+        keywords: ["blend", "دمج"]
+      },
+      {
+        id: "filters-studio",
+        titleAr: "استوديو الفلاتر الحي والمتقدم",
+        titleEn: "Live Visual Filters Studio",
+        categoryAr: "مرشحات",
+        categoryEn: "Filters",
+        icon: <SlidersHorizontal size={16} />,
+        action: () => setIsFiltersStudioOpen(true),
+        keywords: ["filters", "فلاتر", "مرشحات"]
+      },
+      {
+        id: "tool-brush",
+        titleAr: "أداة فرشاة الرسم الفنية",
+        titleEn: "Artistic Brush Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "B",
+        icon: <Brush size={16} />,
+        action: () => setActiveTool("brush"),
+        keywords: ["brush", "فرشاة", "رسم"]
+      },
+      {
+        id: "tool-pencil",
+        titleAr: "أداة قلم الرصاص الدقيق",
+        titleEn: "Precision Pencil Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "N",
+        icon: <Pencil size={16} />,
+        action: () => setActiveTool("pencil"),
+        keywords: ["pencil", "قلم"]
+      },
+      {
+        id: "tool-eraser",
+        titleAr: "أداة الممحاة",
+        titleEn: "Eraser Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "E",
+        icon: <Eraser size={16} />,
+        action: () => setActiveTool("eraser"),
+        keywords: ["eraser", "ممحاة"]
+      },
+      {
+        id: "tool-bucket",
+        titleAr: "أداة سطل التعبئة اللونية",
+        titleEn: "Flood Fill Bucket Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "G",
+        icon: <PaintBucket size={16} />,
+        action: () => setActiveTool("bucket"),
+        keywords: ["bucket", "fill", "سطل", "تعبئة"]
+      },
+      {
+        id: "tool-select",
+        titleAr: "أداة التحديد المستطيل",
+        titleEn: "Marquee Selection Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "M",
+        icon: <Square size={16} />,
+        action: () => setActiveTool("select"),
+        keywords: ["select", "تحديد"]
+      },
+      {
+        id: "tool-shape",
+        titleAr: "أداة الأشكال المتجهة",
+        titleEn: "Vector Shape Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "U",
+        icon: <Square size={16} />,
+        action: () => setActiveTool("shape"),
+        keywords: ["shape", "أشكال"]
+      },
+      {
+        id: "tool-text",
+        titleAr: "أداة النص والكتابة",
+        titleEn: "Typography & Text Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "T",
+        icon: <Type size={16} />,
+        action: () => setActiveTool("text"),
+        keywords: ["text", "نص", "كتابة"]
+      },
+      {
+        id: "tool-stamp",
+        titleAr: "أداة ختم الاستنساخ",
+        titleEn: "Clone Stamp Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "S",
+        icon: <Stamp size={16} />,
+        action: () => setActiveTool("stamp"),
+        keywords: ["stamp", "ختم", "استنساخ"]
+      },
+      {
+        id: "tool-crop",
+        titleAr: "أداة القص والاقتطاع",
+        titleEn: "Crop Tool",
+        categoryAr: "أدوات",
+        categoryEn: "Tools",
+        shortcut: "C",
+        icon: <Crop size={16} />,
+        action: () => setActiveTool("crop"),
+        keywords: ["crop", "قص"]
+      },
+      {
+        id: "view-fit",
+        titleAr: "ملاءمة الشاشة",
+        titleEn: "Fit to Screen",
+        categoryAr: "عرض",
+        categoryEn: "View",
+        shortcut: "Ctrl+0",
+        icon: <Maximize2 size={16} />,
+        action: () => fitToScreen(),
+        keywords: ["fit", "screen", "ملاءمة"]
+      },
+      {
+        id: "view-actual",
+        titleAr: "100% الحجم الفعلي",
+        titleEn: "100% Actual Size",
+        categoryAr: "عرض",
+        categoryEn: "View",
+        shortcut: "Ctrl+1",
+        icon: <ImageIcon size={16} />,
+        action: () => actualSize(),
+        keywords: ["actual", "100", "فعلي"]
+      },
+      {
+        id: "view-grid",
+        titleAr: "تبديل شبكة المحاذاة",
+        titleEn: "Toggle Alignment Grid",
+        categoryAr: "عرض",
+        categoryEn: "View",
+        icon: <Grid size={16} />,
+        action: () => setShowGrid((v) => !v),
+        keywords: ["grid", "شبكة"]
+      },
+      {
+        id: "view-snap",
+        titleAr: "تبديل الالتصاق الذكي (Smart Snap)",
+        titleEn: "Toggle Smart Snap",
+        categoryAr: "عرض",
+        categoryEn: "View",
+        icon: <Magnet size={16} />,
+        action: () => setSnapEnabled((v) => !v),
+        keywords: ["snap", "التصاق"]
+      },
+      {
+        id: "view-fullscreen",
+        titleAr: "تبديل وضع ملء الشاشة الكامل",
+        titleEn: "Toggle Fullscreen",
+        categoryAr: "عرض",
+        categoryEn: "View",
+        shortcut: "F11",
+        icon: isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />,
+        action: () => toggleFullscreen(),
+        keywords: ["fullscreen", "شاشة كاملة"]
+      },
+      {
+        id: "edit-undo",
+        titleAr: "تراجع",
+        titleEn: "Undo",
+        categoryAr: "تحرير",
+        categoryEn: "Edit",
+        shortcut: "Ctrl+Z",
+        icon: <Undo2 size={16} />,
+        action: () => undo(),
+        keywords: ["undo", "تراجع"]
+      },
+      {
+        id: "edit-redo",
+        titleAr: "تقدم",
+        titleEn: "Redo",
+        categoryAr: "تحرير",
+        categoryEn: "Edit",
+        shortcut: "Ctrl+Y",
+        icon: <Redo2 size={16} />,
+        action: () => redo(),
+        keywords: ["redo", "تقدم"]
+      },
+      {
+        id: "edit-select-all",
+        titleAr: "تحديد مساحة العمل بالكامل",
+        titleEn: "Select All",
+        categoryAr: "تحرير",
+        categoryEn: "Edit",
+        shortcut: "Ctrl+A",
+        icon: <Square size={16} />,
+        action: () => selectAll(),
+        keywords: ["select all", "تحديد الكل"]
+      },
+      {
+        id: "edit-deselect",
+        titleAr: "إلغاء التحديد النشط",
+        titleEn: "Deselect",
+        categoryAr: "تحرير",
+        categoryEn: "Edit",
+        shortcut: "Ctrl+D",
+        icon: <X size={16} />,
+        action: () => deselect(),
+        keywords: ["deselect", "الغاء"]
+      },
+    ];
+
+    FILTER_CATALOG.forEach((f) => {
+      list.push({
+        id: `filter-${f.id}`,
+        titleAr: `مرشح: ${f.nameArabic}`,
+        titleEn: `Filter: ${f.id}`,
+        categoryAr: "مرشحات",
+        categoryEn: "Filters",
+        icon: <SlidersHorizontal size={16} />,
+        action: () => {
+          setFilterMode(f.id);
+          if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
+          setStatus(`تم تطبيق المرشح: ${f.nameArabic}`);
+        },
+        keywords: ["filter", f.id, f.nameArabic]
+      });
+    });
+
+    return list;
+  }, [isFullscreen]);
 
   // Point 8: Retouching Automatic Actions
   const handleApplySkinSmoothing = () => {
@@ -3706,7 +4751,7 @@ export default function Home() {
       height: Math.abs(point.y - start.y)
     };
     setSelection((current) => {
-      if (!current || selectionMode === "replace") return next;
+      if (activeTool === "crop" || !current || selectionMode === "replace") return next;
       if (selectionMode === "add") return unionSelection(current, next);
       if (selectionMode === "subtract") return subtractSelection(current, next);
       return next;
@@ -3782,7 +4827,7 @@ export default function Home() {
       const pt = pointFromPointer(event);
       selectionStart.current = pt;
       setSelection({ x: pt.x, y: pt.y, width: 0, height: 0 });
-      setStatus("حدد منطقة القص بالسحب — أفرِج زر الماوس للتطبيق");
+      setStatus(currentLang === "ar" ? "اسحب لتحديد منطقة القص — اضغط تطبيق القص أو Enter عند الانتهاء" : "Drag to define crop region — press Apply or Enter");
       return;
     }
     if (activeTool === "magic") {
@@ -4175,9 +5220,14 @@ export default function Home() {
     if (activeTool === "crop" && selectionStart.current) {
       selectionStart.current = null;
       if (selection && selection.width > 5 && selection.height > 5) {
-        cropToSelection();
+        setStatus(currentLang === "ar" ? `تم تحديد منطقة القص (${Math.round(selection.width)} × ${Math.round(selection.height)} بكسل) — اضغط تطبيق القص أو Enter` : `Crop region selected (${Math.round(selection.width)}x${Math.round(selection.height)})`);
       } else {
-        setStatus("منطقة القص صغيرة جداً — اسحب مساحة أكبر للقص");
+        const cw = imageSize.width || canvasRef.current?.width || 1080;
+        const ch = imageSize.height || canvasRef.current?.height || 1080;
+        const cropW = Math.round(cw * 0.9);
+        const cropH = Math.round(ch * 0.9);
+        setSelection({ x: Math.round((cw - cropW) / 2), y: Math.round((ch - cropH) / 2), width: cropW, height: cropH });
+        setStatus(currentLang === "ar" ? "تم تجهيز منطقة القص — اسحب للتعديل أو اضغط تطبيق القص أو Enter" : "Crop area ready — adjust or apply");
       }
       return;
     }
@@ -4282,6 +5332,20 @@ export default function Home() {
 
   const activateTool = (toolId: string) => {
     setActiveTool(toolId);
+    if (toolId === "crop") {
+      const cw = imageSize.width || canvasRef.current?.width || 1080;
+      const ch = imageSize.height || canvasRef.current?.height || 1080;
+      if (!selection || selection.width < 10 || selection.height < 10) {
+        const cropW = Math.round(cw * 0.9);
+        const cropH = Math.round(ch * 0.9);
+        setSelection({
+          x: Math.round((cw - cropW) / 2),
+          y: Math.round((ch - cropH) / 2),
+          width: cropW,
+          height: cropH,
+        });
+      }
+    }
     if (toolId === "clone" || toolId === "heal" || toolId === "adjust" || toolId === "crop" || toolId === "shape" || toolId === "text" || toolId === "select" || toolId === "brush" || toolId === "pencil" || toolId === "bucket" || toolId === "eraser") {
       setActiveTab("properties");
       if (!isInspectorOpen) setIsInspectorOpen(true);
@@ -4323,427 +5387,443 @@ export default function Home() {
   return (
     <TooltipProvider delayDuration={180}>
       <main className="editor-shell">
-        <header className="command-bar">
-          <div className="brand-lockup">
-            <div className="brand-mark">
-              <img src="/assets/imagepro-logo.png" alt="ImagePro Logo" />
-            </div>
-            <div>
-              <div className="brand-name">ImagePro <span>Studio</span></div>
-              <div className="brand-caption">IMAGE PROCESSING LAB <span>•</span> 02.00</div>
-            </div>
-          </div>
-
-          <nav className="command-nav" aria-label="القائمة الرئيسية">
-            {/* 1. قائمة ملف File Menu */}
-            <div className="app-dropdown-container">
-              <button
-                onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}
-                className={activeMenu === "file" ? "is-active" : ""}
-                data-testid="top-file"
-              >
-                ملف <ChevronDown size={13} />
-              </button>
-              {activeMenu === "file" && (
-                <div className="app-dropdown-menu">
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setNewProjectOpen(true); }}>
-                    <span className="app-menu-item-left"><FilePlus size={14} /> مشروع جديد...</span>
-                    <span className="app-menu-badge">Ctrl+N</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); uploadRef.current?.click(); }}>
-                    <span className="app-menu-item-left"><FolderOpen size={14} /> فتح صورة...</span>
-                    <span className="app-menu-badge">Ctrl+O</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <div style={{ padding: "4px 8px", fontSize: "10px", color: "#6a8c85" }}>الصور النموذجية:</div>
-                  <button className="app-menu-item" onClick={() => loadSampleImage("portrait")}>
-                    <span className="app-menu-item-left"><ImageIcon size={14} /> صورة شخصية</span>
-                    <span className="app-menu-badge">Portrait</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => loadSampleImage("landscape")}>
-                    <span className="app-menu-item-left"><ImageIcon size={14} /> منظر طبيعي</span>
-                    <span className="app-menu-badge">Landscape</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => loadSampleImage("stillLife")}>
-                    <span className="app-menu-item-left"><ImageIcon size={14} /> طبيعة صامتة</span>
-                    <span className="app-menu-badge">Still Life</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); saveProject(); }}>
-                    <span className="app-menu-item-left"><Save size={14} /> حفظ المشروع محلياً</span>
-                    <span className="app-menu-badge">Ctrl+S</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); restoreProject(); }}>
-                    <span className="app-menu-item-left"><RotateCcw size={14} /> استعادة آخر حفظ محلي</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportProjectFile(); }}>
-                    <span className="app-menu-item-left"><FileDown size={14} /> حفظ كملف مشروع (.imagepro)</span>
-                    <span className="app-menu-badge">.imagepro</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); projectFileInputRef.current?.click(); }}>
-                    <span className="app-menu-item-left"><FolderOpen size={14} /> استيراد ملف مشروع (.imagepro)...</span>
-                  </button>
-                  <input
-                    type="file"
-                    ref={projectFileInputRef}
-                    accept=".imagepro,application/json"
-                    style={{ display: "none" }}
-                    onChange={handleProjectFileImport}
-                  />
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setExportOptionsOpen(true); }}>
-                    <span className="app-menu-item-left"><Download size={14} /> تصدير مخصص (JPG/PNG/WebP)...</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFileInfoOpen(true); }}>
-                    <span className="app-menu-item-left"><Info size={14} /> معلومات الملف والمشروع...</span>
-                  </button>
-                </div>
-              )}
+        <header className="command-bar-multitier">
+          {/* ─── الطبقة الأولى (Tier 1): شريط النظام والقوائم الرئيسية وبحث الأوامر ─── */}
+          <div className="command-bar-tier1">
+            <div className="brand-lockup">
+              <div className="brand-mark">
+                <img src="/assets/imagepro-logo.png" alt="ImagePro Logo" />
+              </div>
+              <div>
+                <div className="brand-name">ImagePro <span>Studio</span></div>
+                <div className="brand-caption">IMAGE PROCESSING LAB <span>•</span> 02.00</div>
+              </div>
             </div>
 
-            {/* 2. قائمة تحرير Edit Menu */}
-            <div className="app-dropdown-container">
-              <button
-                onClick={() => setActiveMenu(activeMenu === "edit" ? null : "edit")}
-                className={activeMenu === "edit" ? "is-active" : ""}
-                data-testid="top-edit"
-              >
-                تحرير <ChevronDown size={13} />
-              </button>
-              {activeMenu === "edit" && (
-                <div className="app-dropdown-menu">
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); undo(); }}>
-                    <span className="app-menu-item-left"><Undo2 size={14} /> تراجع</span>
-                    <span className="app-menu-badge">Ctrl+Z</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); redo(); }}>
-                    <span className="app-menu-item-left"><Redo2 size={14} /> تقدم</span>
-                    <span className="app-menu-badge">Ctrl+Y</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); selectAll(); }}>
-                    <span className="app-menu-item-left"><Square size={14} /> تحديد الكل</span>
-                    <span className="app-menu-badge">Ctrl+A</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); deselect(); }}>
-                    <span className="app-menu-item-left"><X size={14} /> إلغاء التحديد</span>
-                    <span className="app-menu-badge">Ctrl+D</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); invertSelection(); }}>
-                    <span className="app-menu-item-left"><Sparkles size={14} /> عكس التحديد</span>
-                    <span className="app-menu-badge">Ctrl+Shift+I</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); clearSelectedPaint(); }}>
-                    <span className="app-menu-item-left"><Eraser size={14} /> تنظيف طبقة الرسم</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => {
-                    setActiveMenu(null);
-                    resetAdjustments();
-                  }}>
-                    <span className="app-menu-item-left"><RotateCcw size={14} /> إعادة ضبط التعديلات</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <nav className="command-nav" aria-label="القائمة الرئيسية">
+              {/* 1. قائمة ملف File Menu */}
+              <div className="app-dropdown-container">
+                <button
+                  onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}
+                  className={activeMenu === "file" ? "is-active" : ""}
+                  data-testid="top-file"
+                >
+                  ملف <ChevronDown size={13} />
+                </button>
+                {activeMenu === "file" && (
+                  <div className="app-dropdown-menu">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setNewProjectOpen(true); }}>
+                      <span className="app-menu-item-left"><FilePlus size={14} /> مشروع جديد...</span>
+                      <span className="app-menu-badge">Ctrl+N</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); uploadRef.current?.click(); }}>
+                      <span className="app-menu-item-left"><FolderOpen size={14} /> فتح صورة...</span>
+                      <span className="app-menu-badge">Ctrl+O</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <div style={{ padding: "4px 8px", fontSize: "10px", color: "#6a8c85" }}>الصور النموذجية:</div>
+                    <button className="app-menu-item" onClick={() => loadSampleImage("portrait")}>
+                      <span className="app-menu-item-left"><ImageIcon size={14} /> صورة شخصية</span>
+                      <span className="app-menu-badge">Portrait</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => loadSampleImage("landscape")}>
+                      <span className="app-menu-item-left"><ImageIcon size={14} /> منظر طبيعي</span>
+                      <span className="app-menu-badge">Landscape</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => loadSampleImage("stillLife")}>
+                      <span className="app-menu-item-left"><ImageIcon size={14} /> طبيعة صامتة</span>
+                      <span className="app-menu-badge">Still Life</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); saveProject(); }}>
+                      <span className="app-menu-item-left"><Save size={14} /> حفظ المشروع محلياً</span>
+                      <span className="app-menu-badge">Ctrl+S</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); restoreProject(); }}>
+                      <span className="app-menu-item-left"><RotateCcw size={14} /> استعادة آخر حفظ محلي</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportProjectFile(); }}>
+                      <span className="app-menu-item-left"><FileDown size={14} /> حفظ كملف مشروع (.imagepro)</span>
+                      <span className="app-menu-badge">.imagepro</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); projectFileInputRef.current?.click(); }}>
+                      <span className="app-menu-item-left"><FolderOpen size={14} /> استيراد ملف مشروع (.imagepro)...</span>
+                    </button>
+                    <input
+                      type="file"
+                      ref={projectFileInputRef}
+                      accept=".imagepro,application/json"
+                      style={{ display: "none" }}
+                      onChange={handleProjectFileImport}
+                    />
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsProjectsDashboardOpen(true); }}>
+                      <span className="app-menu-item-left"><Folder size={14} /> لوحة المشاريع المحفوظة...</span>
+                      <span className="app-menu-badge">Dashboard</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsVersionHistoryOpen(true); }}>
+                      <span className="app-menu-item-left"><History size={14} /> سجل الإصدارات واللقطات السابقة...</span>
+                      <span className="app-menu-badge">Timeline</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setExportOptionsOpen(true); }}>
+                      <span className="app-menu-item-left"><Download size={14} /> تصدير مخصص (JPG/PNG/WebP)...</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFileInfoOpen(true); }}>
+                      <span className="app-menu-item-left"><Info size={14} /> معلومات الملف والمشروع...</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-            {/* 3. قائمة صورة Image Menu (Phase 3 Complete) */}
-            <div className="app-dropdown-container">
-              <button
-                onClick={() => setActiveMenu(activeMenu === "image" ? null : "image")}
-                className={activeMenu === "image" ? "is-active" : ""}
-                data-testid="top-image"
-              >
-                صورة <ChevronDown size={13} />
-              </button>
-              {activeMenu === "image" && (
-                <div className="app-dropdown-menu">
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v + 90) % 360); setStatus("تم تدوير الصورة 90° باتجاه عقارب الساعة"); }}>
-                    <span className="app-menu-item-left"><RotateCw size={14} /> تدوير 90° باتجاه عقارب الساعة</span>
-                    <span className="app-menu-badge">90°</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v - 90 + 360) % 360); setStatus("تم تدوير الصورة 90° عكس عقارب الساعة"); }}>
-                    <span className="app-menu-item-left"><RotateCcw size={14} /> تدوير 90° عكس عقارب الساعة</span>
-                    <span className="app-menu-badge">-90°</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v + 180) % 360); setStatus("تم تدوير الصورة 180°"); }}>
-                    <span className="app-menu-item-left"><RotateCw size={14} /> تدوير 180° بالكامل</span>
-                    <span className="app-menu-badge">180°</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFlipX((v) => !v); setStatus("تم القلب أفقياً"); }}>
-                    <span className="app-menu-item-left">↔️ قلب أفقي (Flip Horizontal)</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFlipY((v) => !v); setStatus("تم القلب رأسياً"); }}>
-                    <span className="app-menu-item-left">↕️ قلب رأسي (Flip Vertical)</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToSquare(); }}>
-                    <span className="app-menu-item-left"><Crop size={14} /> قص مربع متساوي الأبعاد (1:1)</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToRatio(16, 9); }}>
-                    <span className="app-menu-item-left"><Crop size={14} /> قص بنسبة شاشة عريضة (16:9)</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToRatio(4, 3); }}>
-                    <span className="app-menu-item-left"><Crop size={14} /> قص بنسبة قياسية (4:3)</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToSelection(); }}>
-                    <span className="app-menu-item-left"><Crop size={14} /> قص منطقة التحديد النشطة</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => {
-                    setActiveMenu(null);
-                    setResizeWidth(imageSize.width);
-                    setResizeHeight(imageSize.height);
-                    setResizeDialogOpen(true);
-                  }}>
-                    <span className="app-menu-item-left"><Scale size={14} /> تغيير حجم وأبعاد الصورة...</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); handlePureContentCutout(); }}>
-                    <span className="app-menu-item-left"><Crop size={14} /> 🎯 عزل المحتوى الصافي فقط (بدون أي خلفية)</span>
-                    <span className="app-menu-badge" style={{ background: "rgba(234,179,8,0.2)", color: "#fef08a" }}>محتوى نقي</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); customBgInputRef.current?.click(); }}>
-                    <span className="app-menu-item-left"><Upload size={14} /> 🖼️ رفع صورة خلفية مخصصة للصورة المعزولة...</span>
-                    <span className="app-menu-badge" style={{ background: "rgba(59,130,246,0.2)", color: "#93c5fd" }}>خلفية</span>
-                  </button>
-                </div>
-              )}
-            </div>
+              {/* 2. قائمة تحرير Edit Menu */}
+              <div className="app-dropdown-container">
+                <button
+                  onClick={() => setActiveMenu(activeMenu === "edit" ? null : "edit")}
+                  className={activeMenu === "edit" ? "is-active" : ""}
+                  data-testid="top-edit"
+                >
+                  تحرير <ChevronDown size={13} />
+                </button>
+                {activeMenu === "edit" && (
+                  <div className="app-dropdown-menu">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); undo(); }}>
+                      <span className="app-menu-item-left"><Undo2 size={14} /> تراجع</span>
+                      <span className="app-menu-badge">Ctrl+Z</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); redo(); }}>
+                      <span className="app-menu-item-left"><Redo2 size={14} /> تقدم</span>
+                      <span className="app-menu-badge">Ctrl+Y</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); selectAll(); }}>
+                      <span className="app-menu-item-left"><Square size={14} /> تحديد الكل</span>
+                      <span className="app-menu-badge">Ctrl+A</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); deselect(); }}>
+                      <span className="app-menu-item-left"><X size={14} /> إلغاء التحديد</span>
+                      <span className="app-menu-badge">Ctrl+D</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); invertSelection(); }}>
+                      <span className="app-menu-item-left"><Sparkles size={14} /> عكس التحديد</span>
+                      <span className="app-menu-badge">Ctrl+Shift+I</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); clearSelectedPaint(); }}>
+                      <span className="app-menu-item-left"><Eraser size={14} /> تنظيف طبقة الرسم</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => {
+                      setActiveMenu(null);
+                      resetAdjustments();
+                    }}>
+                      <span className="app-menu-item-left"><RotateCcw size={14} /> إعادة ضبط التعديلات</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-            {/* 4. قائمة مرشح Filter Menu (Phase 3 Complete) */}
-            <div className="app-dropdown-container">
-              <button
-                onClick={() => setActiveMenu(activeMenu === "filter" ? null : "filter")}
-                className={activeMenu === "filter" ? "is-active" : ""}
-                data-testid="top-filter"
-              >
-                مرشح <ChevronDown size={13} />
-              </button>
-              {activeMenu === "filter" && (
-                <div className="app-dropdown-menu" style={{ maxHeight: "420px", overflowY: "auto", minWidth: "260px" }}>
-                  {FILTER_CATALOG.map((f) => (
-                    <button
-                      key={f.id}
-                      className="app-menu-item"
-                      onClick={() => {
-                        setActiveMenu(null);
-                        setFilterMode(f.id);
-                        if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
-                        setStatus(`تم تطبيق المرشح: ${f.nameArabic}`);
-                      }}
-                    >
-                      <span className="app-menu-item-left" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span>{f.nameArabic}</span>
-                        <span style={{ fontSize: "9px", color: "#6a8c85", background: "rgba(255,255,255,0.06)", padding: "1px 5px", borderRadius: "3px" }}>{f.category}</span>
+              {/* 3. قائمة صورة Image Menu */}
+              <div className="app-dropdown-container">
+                <button
+                  onClick={() => setActiveMenu(activeMenu === "image" ? null : "image")}
+                  className={activeMenu === "image" ? "is-active" : ""}
+                  data-testid="top-image"
+                >
+                  صورة <ChevronDown size={13} />
+                </button>
+                {activeMenu === "image" && (
+                  <div className="app-dropdown-menu">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v + 90) % 360); setStatus("تم تدوير الصورة 90° باتجاه عقارب الساعة"); }}>
+                      <span className="app-menu-item-left"><RotateCw size={14} /> تدوير 90° باتجاه عقارب الساعة</span>
+                      <span className="app-menu-badge">90°</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v - 90 + 360) % 360); setStatus("تم تدوير الصورة 90° عكس عقارب الساعة"); }}>
+                      <span className="app-menu-item-left"><RotateCcw size={14} /> تدوير 90° عكس عقارب الساعة</span>
+                      <span className="app-menu-badge">-90°</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setRotation((v) => (v + 180) % 360); setStatus("تم تدوير الصورة 180°"); }}>
+                      <span className="app-menu-item-left"><RotateCw size={14} /> تدوير 180° بالكامل</span>
+                      <span className="app-menu-badge">180°</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFlipX((v) => !v); setStatus("تم القلب أفقياً"); }}>
+                      <span className="app-menu-item-left">↔️ قلب أفقي (Flip Horizontal)</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setFlipY((v) => !v); setStatus("تم القلب رأسياً"); }}>
+                      <span className="app-menu-item-left">↕️ قلب رأسي (Flip Vertical)</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToSquare(); }}>
+                      <span className="app-menu-item-left"><Crop size={14} /> قص مربع متساوي الأبعاد (1:1)</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToRatio(16, 9); }}>
+                      <span className="app-menu-item-left"><Crop size={14} /> قص بنسبة شاشة عريضة (16:9)</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToRatio(4, 3); }}>
+                      <span className="app-menu-item-left"><Crop size={14} /> قص بنسبة قياسية (4:3)</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); cropToSelection(); }}>
+                      <span className="app-menu-item-left"><Crop size={14} /> قص منطقة التحديد النشطة</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => {
+                      setActiveMenu(null);
+                      setResizeWidth(imageSize.width);
+                      setResizeHeight(imageSize.height);
+                      setResizeDialogOpen(true);
+                    }}>
+                      <span className="app-menu-item-left"><Scale size={14} /> تغيير حجم وأبعاد الصورة...</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. قائمة عرض View Menu */}
+              <div className="app-dropdown-container">
+                <button
+                  onClick={() => setActiveMenu(activeMenu === "view" ? null : "view")}
+                  className={activeMenu === "view" ? "is-active" : ""}
+                  data-testid="top-view"
+                >
+                  عرض <ChevronDown size={13} />
+                </button>
+                {activeMenu === "view" && (
+                  <div className="app-dropdown-menu">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); actualSize(); }}>
+                      <span className="app-menu-item-left"><ImageIcon size={14} /> 100% الحجم الفعلي</span>
+                      <span className="app-menu-badge">Ctrl+1</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); fitToScreen(); }}>
+                      <span className="app-menu-item-left"><ImageIcon size={14} /> ملاءمة الشاشة (Fit)</span>
+                      <span className="app-menu-badge">Ctrl+0</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setZoom((v) => Math.min(200, v + 10)); }}>
+                      <span className="app-menu-item-left"><Plus size={14} /> تكبير (Zoom In)</span>
+                      <span className="app-menu-badge">+</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setZoom((v) => Math.max(20, v - 10)); }}>
+                      <span className="app-menu-item-left"><Minus size={14} /> تصغير (Zoom Out)</span>
+                      <span className="app-menu-badge">-</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowGrid(!showGrid); setStatus(showGrid ? "تم إخفاء شبكة المحاذاة" : "تم إظهار شبكة المحاذاة"); }}>
+                      <span className="app-menu-item-left"><Grid size={14} /> {showGrid ? "إخفاء شبكة المحاذاة" : "إظهار شبكة المحاذاة"}</span>
+                      <span className="app-menu-badge">{showGrid ? "✓" : ""}</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowRulers(!showRulers); setStatus(showRulers ? "تم إخفاء المساطر" : "تم إظهار مساطر الأبعاد (Rulers)"); }}>
+                      <span className="app-menu-item-left"><Ruler size={14} /> {showRulers ? "إخفاء المساطر" : "إظهار مساطر الأبعاد (Rulers)"}</span>
+                      <span className="app-menu-badge">{showRulers ? "✓" : ""}</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowGuides(!showGuides); setStatus(showGuides ? "تم إخفاء الخطوط الإرشادية" : "تم إظهار الخطوط الإرشادية (Guides)"); }}>
+                      <span className="app-menu-item-left">📐 {showGuides ? "إخفاء الخطوط الإرشادية" : "إظهار الخطوط الإرشادية"}</span>
+                      <span className="app-menu-badge">{showGuides ? "✓" : ""}</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setSnapEnabled(!snapEnabled); setStatus(snapEnabled ? "تم إيقاف الالتصاق الذكي" : "تم تفعيل الالتصاق الذكي (Smart Snap)"); }}>
+                      <span className="app-menu-item-left"><Magnet size={14} /> الالتصاق الذكي (Smart Snap)</span>
+                      <span className="app-menu-badge">{snapEnabled ? "✓" : ""}</span>
+                    </button>
+                    {guides.length > 0 && (
+                      <button className="app-menu-item" onClick={() => { setActiveMenu(null); setGuides([]); setStatus("تم مسح كافة الخطوط الإرشادية"); }}>
+                        <span className="app-menu-item-left">🗑️ مسح الخطوط الإرشادية ({guides.length})</span>
+                      </button>
+                    )}
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsInspectorOpen(!isInspectorOpen); setStatus(isInspectorOpen ? "تم طي لوحة الخصائص" : "تم إظهار لوحة الخصائص"); }}>
+                      <span className="app-menu-item-left"><PanelRight size={14} /> {isInspectorOpen ? "طي اللوحة الجانبية" : "إظهار اللوحة الجانبية"}</span>
+                      <span className="app-menu-badge">{isInspectorOpen ? "✓" : ""}</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    {/* Fullscreen Toggle & Restore Button with Dynamic State */}
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); toggleFullscreen(); }}>
+                      <span className="app-menu-item-left">
+                        {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                        {isFullscreen ? "إنهاء ملء الشاشة (استعادة الحجم الأصلي)" : "ملء الشاشة الكامل"}
                       </span>
-                      <span className="app-menu-badge">{filterMode === f.id ? "✓" : ""}</span>
+                      <span className="app-menu-badge">{isFullscreen ? "Esc" : "F11"}</span>
                     </button>
-                  ))}
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setThresholdEnabled(!thresholdEnabled); setStatus(thresholdEnabled ? "تم إيقاف العتبة الثنائية" : "تم تفعيل العتبة الثنائية (Threshold)"); }}>
-                    <span className="app-menu-item-left">عتبة ثنائية (Threshold)</span>
-                    <span className="app-menu-badge">{thresholdEnabled ? "✓" : ""}</span>
-                  </button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
+            </nav>
+
+            {/* Center Project Info Badge in Tier 1 */}
+            <div className="tier1-project-status" title={currentLang === "ar" ? "أبعاد ومواصفات مساحة العمل الحالية" : "Active Canvas Dimensions"}>
+              <span className="proj-title">{imageName}</span>
+              <span>•</span>
+              <span className="proj-dim">{imageSize.width} × {imageSize.height} px</span>
+              <span>•</span>
+              <span style={{ fontSize: "10px", color: "var(--studio-text-muted)" }}>{zoom}%</span>
             </div>
 
-            {/* 5. قائمة عرض View Menu (Phase 2 & User Feedback Fix) */}
-            <div className="app-dropdown-container">
+            {/* System Actions on Tier 1 Right */}
+            <div className="tier1-actions-right">
+              {/* Quick Command Search Trigger (Ctrl+K) */}
               <button
-                onClick={() => setActiveMenu(activeMenu === "view" ? null : "view")}
-                className={activeMenu === "view" ? "is-active" : ""}
-                data-testid="top-view"
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="tier1-search-trigger"
+                title={currentLang === "ar" ? "البحث في لوحة الأوامر السريعة (Ctrl+K)" : "Quick Command Palette (Ctrl+K)"}
               >
-                عرض <ChevronDown size={13} />
-              </button>
-              {activeMenu === "view" && (
-                <div className="app-dropdown-menu">
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); actualSize(); }}>
-                    <span className="app-menu-item-left"><ImageIcon size={14} /> 100% الحجم الفعلي</span>
-                    <span className="app-menu-badge">Ctrl+1</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); fitToScreen(); }}>
-                    <span className="app-menu-item-left"><ImageIcon size={14} /> ملاءمة الشاشة (Fit)</span>
-                    <span className="app-menu-badge">Ctrl+0</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setZoom((v) => Math.min(200, v + 10)); }}>
-                    <span className="app-menu-item-left"><Plus size={14} /> تكبير (Zoom In)</span>
-                    <span className="app-menu-badge">+</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setZoom((v) => Math.max(20, v - 10)); }}>
-                    <span className="app-menu-item-left"><Minus size={14} /> تصغير (Zoom Out)</span>
-                    <span className="app-menu-badge">-</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowGrid(!showGrid); setStatus(showGrid ? "تم إخفاء شبكة المحاذاة" : "تم إظهار شبكة المحاذاة"); }}>
-                    <span className="app-menu-item-left"><Grid size={14} /> {showGrid ? "إخفاء شبكة المحاذاة" : "إظهار شبكة المحاذاة"}</span>
-                    <span className="app-menu-badge">{showGrid ? "✓" : ""}</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowRulers(!showRulers); setStatus(showRulers ? "تم إخفاء المساطر" : "تم إظهار مساطر الأبعاد (Rulers)"); }}>
-                    <span className="app-menu-item-left"><Ruler size={14} /> {showRulers ? "إخفاء المساطر" : "إظهار مساطر الأبعاد (Rulers)"}</span>
-                    <span className="app-menu-badge">{showRulers ? "✓" : ""}</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setShowGuides(!showGuides); setStatus(showGuides ? "تم إخفاء الخطوط الإرشادية" : "تم إظهار الخطوط الإرشادية (Guides)"); }}>
-                    <span className="app-menu-item-left">📐 {showGuides ? "إخفاء الخطوط الإرشادية" : "إظهار الخطوط الإرشادية"}</span>
-                    <span className="app-menu-badge">{showGuides ? "✓" : ""}</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setSnapEnabled(!snapEnabled); setStatus(snapEnabled ? "تم إيقاف الالتصاق الذكي" : "تم تفعيل الالتصاق الذكي (Smart Snap)"); }}>
-                    <span className="app-menu-item-left"><Magnet size={14} /> الالتصاق الذكي (Smart Snap)</span>
-                    <span className="app-menu-badge">{snapEnabled ? "✓" : ""}</span>
-                  </button>
-                  {guides.length > 0 && (
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setGuides([]); setStatus("تم مسح كافة الخطوط الإرشادية"); }}>
-                      <span className="app-menu-item-left">🗑️ مسح الخطوط الإرشادية ({guides.length})</span>
-                    </button>
-                  )}
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsInspectorOpen(!isInspectorOpen); setStatus(isInspectorOpen ? "تم طي لوحة الخصائص" : "تم إظهار لوحة الخصائص"); }}>
-                    <span className="app-menu-item-left"><PanelRight size={14} /> {isInspectorOpen ? "طي اللوحة الجانبية" : "إظهار اللوحة الجانبية"}</span>
-                    <span className="app-menu-badge">{isInspectorOpen ? "✓" : ""}</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  {/* Fullscreen Toggle & Restore Button with Dynamic State */}
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); toggleFullscreen(); }}>
-                    <span className="app-menu-item-left">
-                      {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                      {isFullscreen ? "إنهاء ملء الشاشة (استعادة الحجم الأصلي)" : "ملء الشاشة الكامل"}
-                    </span>
-                    <span className="app-menu-badge">{isFullscreen ? "Esc" : "F11"}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </nav>
-
-          <div className="command-actions">
-            {/* Canva-Grade Capsule Dock Bar */}
-            <div className="canva-capsule-dock">
-              {/* Canva Signature Featured Pill: Magic AI Studio */}
-              <button
-                onClick={handlePureContentCutout}
-                className="canva-pill-featured"
-                title={currentLang === "ar" ? "استوديو الذكاء الاصطناعي والتفريغ العصبي IS-Net" : "Magic AI Cutout Studio"}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{currentLang === "ar" ? "الذكاء الاصطناعي" : "Magic AI"}</span>
+                <Search size={13} />
+                <span>{currentLang === "ar" ? "الأوامر" : "Commands"}</span>
+                <span className="search-kbd">Ctrl+K</span>
               </button>
 
-              {/* Pill 2: New Project & Templates */}
-              <button
-                onClick={() => setIsTemplatesModalOpen(true)}
-                className="canva-pill-item"
-                title={currentLang === "ar" ? "مشروع جديد واختيار قوالب جاهزة" : "New Project & Templates"}
-              >
-                <span>📐</span>
-                <span>{currentLang === "ar" ? "القوالب" : "Templates"}</span>
-              </button>
-
-              {/* Pill 3: Two-Image Blend Studio */}
-              <button
-                onClick={() => setIsBlendModalOpen(true)}
-                className="canva-pill-item"
-                title={currentLang === "ar" ? "استوديو دمج صورتين باحترافية" : "Two-Image Blend Studio"}
-              >
-                <span>🖼️</span>
-                <span>{currentLang === "ar" ? "دمج صورتين" : "Blend"}</span>
-              </button>
-
-              {/* Pill 4: Product Showcase Studio Backgrounds */}
-              <button
-                onClick={() => setIsProductBgModalOpen(true)}
-                className="canva-pill-item"
-                title={currentLang === "ar" ? "مكتبة خلفيات المنتجات واستوديو التصوير" : "Product Showcase Backgrounds"}
-              >
-                <span>🎨</span>
-                <span>{currentLang === "ar" ? "الخلفيات" : "Backdrop"}</span>
-              </button>
-
-              {/* Pill 5: Live Visual Filters Studio */}
-              <button
-                onClick={() => setIsFiltersStudioOpen(true)}
-                className="canva-pill-item"
-                title={currentLang === "ar" ? "استوديو الفلاتر الحي — معاينة حية لجميع الفلاتر على صورتك" : "Live Visual Filters Studio"}
-              >
-                <span>🎭</span>
-                <span>{currentLang === "ar" ? "الفلاتر الحية" : "Live Filters"}</span>
-              </button>
-
-              {/* Language Toggle */}
+              {/* Language Switcher */}
               <button
                 onClick={() => {
                   const nextLang = currentLang === "ar" ? "en" : "ar";
                   setCurrentLang(nextLang);
                   setStatus(nextLang === "ar" ? "تم تحويل اللغة إلى العربية" : "Switched to English");
                 }}
-                className="canva-pill-item"
+                className="tier1-search-trigger"
+                style={{ padding: "4px 8px" }}
                 title={currentLang === "ar" ? "Switch to English" : "التحويل للعربية"}
               >
                 <span>🌐</span>
-                <span className="font-bold">{currentLang === "ar" ? "EN" : "عربي"}</span>
+                <span style={{ fontWeight: 700 }}>{currentLang === "ar" ? "EN" : "عربي"}</span>
               </button>
 
-              {/* Theme Toggle */}
+              {/* Theme Switcher */}
               <button
                 onClick={() => {
                   const nextTheme = currentTheme === "dark" ? "light" : "dark";
                   setCurrentTheme(nextTheme);
                   document.documentElement.classList.toggle("light-theme", nextTheme === "light");
                 }}
-                className="canva-pill-item"
+                className="tier1-search-trigger"
+                style={{ padding: "4px 8px" }}
                 title={currentTheme === "dark" ? "التحويل للوضع النهاري" : "Switch to Dark Mode"}
               >
                 <span>{currentTheme === "dark" ? "☀️" : "🌙"}</span>
               </button>
-            </div>
 
-            <button className="save-state save-action" onClick={saveProject} data-testid="save-project">
-              <span className="save-dot" /> {isRendering ? "جارٍ المعالجة..." : "حفظ المشروع"}
-            </button>
-            <button className="icon-action" aria-label="حالة التخزين السحابي" onClick={() => setStatus("التخزين السحابي غير متصل — الحفظ المحلي في المتصفح فعال")}>
-              <Cloud size={16} />
-            </button>
-
-            {/* قائمة التصدير المنسدلة */}
-            <div className="app-dropdown-container">
+              {/* Help Button */}
               <button
-                className="export-button"
-                onClick={() => setActiveMenu(activeMenu === "export" ? null : "export")}
-                data-testid="export-png"
+                onClick={() => setHelpOpen(true)}
+                title="دليل المستخدم — مساعدة"
+                className="tier1-search-trigger"
+                style={{ padding: "4px 10px" }}
               >
-                <Download size={15} /> تصدير <ChevronDown size={13} />
+                <span>📖 مساعدة</span>
               </button>
-              {activeMenu === "export" && (
-                <div className="app-dropdown-menu align-left">
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("png"); }}>
-                    <span className="app-menu-item-left"><Download size={14} /> تصدير PNG (شفافية كاملة)</span>
-                    <span className="app-menu-badge">PNG</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("jpeg", 92); }}>
-                    <span className="app-menu-item-left"><Download size={14} /> تصدير JPG (جودة 92%)</span>
-                    <span className="app-menu-badge">JPG</span>
-                  </button>
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("webp", 90); }}>
-                    <span className="app-menu-item-left"><Download size={14} /> تصدير WebP (ضغط متقدم)</span>
-                    <span className="app-menu-badge">WebP</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button className="app-menu-item" onClick={() => { setActiveMenu(null); setExportOptionsOpen(true); }}>
-                    <span className="app-menu-item-left"><Settings2 size={14} /> خيارات تصدير مخصصة...</span>
-                  </button>
-                </div>
-              )}
             </div>
-            <button
-              onClick={() => setHelpOpen(true)}
-              title="دليل المستخدم — مساعدة"
-              className="studio-pill studio-pill-help"
-            >
-              📖 مساعدة
-            </button>
-            <div className="avatar" title="محرر الصور الجامعي">AR</div>
+          </div>
+
+          {/* ─── الطبقة الثانية (Tier 2): شريط استوديو الإبداع (Studio Hero Ribbon) ─── */}
+          <div className="command-bar-tier2">
+            <div className="tier2-actions-left">
+              {/* 1. المكتبة الإبداعية الشاملة (Royal Purple Gradient - Pixelora Grade) */}
+              <button
+                onClick={() => setIsCreativeLibraryOpen(true)}
+                className="studio-hero-pill studio-hero-pill-creative"
+                title={currentLang === "ar" ? "المكتبة الإبداعية الشاملة (أصول، عناصر، خلفيات)" : "Creative Library Hub"}
+                data-testid="pixelora-creative-library"
+              >
+                <Sparkles size={14} />
+                <span>{currentLang === "ar" ? "المكتبة الإبداعية" : "Creative Library"}</span>
+              </button>
+
+              {/* 2. القوالب الجاهزة (Rose/Magenta Gradient) */}
+              <button
+                onClick={() => setIsTemplatesModalOpen(true)}
+                className="studio-hero-pill studio-hero-pill-templates"
+                title={currentLang === "ar" ? "قوالب احترافية قابلة للتعديل والمقاسات الجاهزة" : "Live Templates"}
+                data-testid="studio-templates"
+              >
+                <Square size={13} style={{ transform: "rotate(45deg)" }} />
+                <span>{currentLang === "ar" ? "قوالب جاهزة" : "Templates"}</span>
+              </button>
+
+              {/* 3. استوديو الخلفيات (Ocean Blue Gradient) */}
+              <button
+                onClick={() => setIsProductBgModalOpen(true)}
+                className="studio-hero-pill studio-hero-pill-backdrops"
+                title={currentLang === "ar" ? "استوديو خلفيات المنتجات والبورتريه المبتكرة" : "Studio Backdrops"}
+                data-testid="studio-backdrops"
+              >
+                <ImageIcon size={14} />
+                <span>{currentLang === "ar" ? "استوديو الخلفيات" : "Backdrops"}</span>
+              </button>
+
+              {/* 4. لوحة المشاريع وسجل الإصدارات (Electric Sapphire Gradient - Luxury Style) */}
+              <button
+                onClick={() => setIsProjectsDashboardOpen(true)}
+                className="studio-hero-pill studio-hero-pill-projects"
+                title={currentLang === "ar" ? "لوحة المشاريع المحفوظة والنسخ الاحتياطية" : "Projects Dashboard"}
+                data-testid="studio-projects"
+              >
+                <Folder size={14} />
+                <span>{currentLang === "ar" ? "المشاريع" : "Projects"}</span>
+              </button>
+
+              {/* 5. تصدير متعدد القياسات (Amber/Orange Gradient) */}
+              <button
+                onClick={() => setIsMultiExportOpen(true)}
+                className="studio-hero-pill studio-hero-pill-amber"
+                title={currentLang === "ar" ? "تصدير دفعي لكافة منصات التواصل بنقرة واحدة" : "Multi-Size Export"}
+                data-testid="studio-multi-export"
+              >
+                <Download size={14} />
+                <span>{currentLang === "ar" ? "تصدير متعدد" : "Multi-Export"}</span>
+              </button>
+            </div>
+
+            {/* Right Side: Quick Save & High-Res Export */}
+            <div className="tier2-actions-right">
+              {/* Save Project Button */}
+              <button
+                className="pixelora-pill-save"
+                onClick={saveProject}
+                data-testid="save-project"
+                title={currentLang === "ar" ? "حفظ المشروع محلياً في المتصفح (Ctrl+S)" : "Save Project Locally"}
+              >
+                <span className="save-dot" />
+                <span>{isRendering ? (currentLang === "ar" ? "جارٍ الحفظ..." : "Saving...") : (currentLang === "ar" ? "حفظ" : "Save")}</span>
+              </button>
+
+              {/* Export Dropdown */}
+              <div className="app-dropdown-container">
+                <button
+                  className="pixelora-pill-export"
+                  onClick={() => setActiveMenu(activeMenu === "export" ? null : "export")}
+                  data-testid="export-png"
+                  title={currentLang === "ar" ? "تصدير الصورة بجودة عالية" : "Export High-Res Image"}
+                >
+                  <Download size={14} />
+                  <span>{currentLang === "ar" ? "تصدير" : "Export"}</span>
+                  <ChevronDown size={12} />
+                </button>
+                {activeMenu === "export" && (
+                  <div className="app-dropdown-menu align-left">
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("png"); }}>
+                      <span className="app-menu-item-left"><Download size={14} /> تصدير PNG (شفافية كاملة)</span>
+                      <span className="app-menu-badge">PNG</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("jpeg", 92); }}>
+                      <span className="app-menu-item-left"><Download size={14} /> تصدير JPG (جودة 92%)</span>
+                      <span className="app-menu-badge">JPG</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("webp", 90); }}>
+                      <span className="app-menu-item-left"><Download size={14} /> تصدير WebP (ضغط متقدم)</span>
+                      <span className="app-menu-badge">WebP</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsMultiExportOpen(true); }}>
+                      <span className="app-menu-item-left"><Download size={14} /> 🚀 تصدير متعدد القياسات (Multi-Size)...</span>
+                      <span className="app-menu-badge">Batch</span>
+                    </button>
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsWatermarkOpen(true); }}>
+                      <span className="app-menu-item-left"><Stamp size={14} /> 🛡️ استوديو العلامة المائية...</span>
+                      <span className="app-menu-badge">Watermark</span>
+                    </button>
+                    <div className="app-menu-separator" />
+                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setExportOptionsOpen(true); }}>
+                      <span className="app-menu-item-left"><Settings2 size={14} /> خيارات تصدير مخصصة...</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
@@ -4888,13 +5968,72 @@ export default function Home() {
 
           {/* Options for CROP */}
           {activeTool === "crop" && (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span className="tool-opt-label">📐 {currentLang === "ar" ? "أبعاد القص:" : "Crop Size:"}</span>
+                <span className="tool-opt-value">
+                  {selection ? `${Math.round(selection.width)} × ${Math.round(selection.height)} px` : "—"}
+                </span>
+              </div>
+
+              <div className="tool-bar-separator" />
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span className="tool-opt-label">{currentLang === "ar" ? "نسب جاهزة:" : "Presets:"}</span>
+                <div className="tool-mode-group">
+                  <button type="button" onClick={() => setCropPresetRatio(1, 1)} className="tool-mode-btn" title="قص بنسبة مربعة 1:1">
+                    1:1 مربع
+                  </button>
+                  <button type="button" onClick={() => setCropPresetRatio(16, 9)} className="tool-mode-btn" title="قص بنسبة عريضة 16:9">
+                    16:9 عريض
+                  </button>
+                  <button type="button" onClick={() => setCropPresetRatio(4, 3)} className="tool-mode-btn" title="قص بنسبة قياسية 4:3">
+                    4:3 قياسي
+                  </button>
+                  <button type="button" onClick={() => setCropPresetRatio(0, 0)} className="tool-mode-btn" title="تحديد كامل مساحة الصورة">
+                    كامل الصورة
+                  </button>
+                </div>
+              </div>
+
+              <div className="tool-bar-separator" />
+
               <button
                 type="button"
                 onClick={cropToSelection}
-                style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(16,185,129,0.3)" }}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  background: "linear-gradient(135deg, #10b981, #059669)",
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 10px rgba(16,185,129,0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
+                title="تطبيق القص على الصورة الحالية (Enter)"
               >
-                ✓ {currentLang === "ar" ? "تطبيق القص للمنطقة المحددة" : "Apply Crop"}
+                <Check size={14} />
+                <span>{currentLang === "ar" ? "تطبيق القص (Enter)" : "Apply Crop (Enter)"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelection(null);
+                  setActiveTool("select");
+                  setStatus(currentLang === "ar" ? "تم إلغاء القص والعودة لأداة التحديد" : "Crop cancelled");
+                }}
+                className="studio-pill studio-pill-neutral"
+                style={{ padding: "4px 10px", fontSize: "11px" }}
+                title="إلغاء القص (Esc)"
+              >
+                <X size={13} />
+                <span>{currentLang === "ar" ? "إلغاء (Esc)" : "Cancel (Esc)"}</span>
               </button>
             </div>
           )}
@@ -5358,6 +6497,61 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Crash Recovery Notification Toast */}
+              {autosaveRecoverCandidate && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "16px",
+                    zIndex: 40,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    background: "rgba(15, 23, 42, 0.92)",
+                    border: "1px solid rgba(45, 212, 191, 0.3)",
+                    boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+                    color: "#f8fafc",
+                    fontSize: "13px",
+                    backdropFilter: "blur(12px)"
+                  }}
+                >
+                  <span style={{ fontSize: "16px" }}>⚠️</span>
+                  <span>
+                    {currentLang === "ar"
+                      ? "تم العثور على جلسة عمل سابقة غير محفوظة (حفظ تلقائي)."
+                      : "An unsaved work session was recovered."}
+                  </span>
+                  <button
+                    className="btn-primary"
+                    style={{ padding: "4px 10px", fontSize: "12px", height: "auto" }}
+                    onClick={() => {
+                      try {
+                        const parsed = JSON.parse(autosaveRecoverCandidate.data);
+                        loadPackageIntoStudio(parsed);
+                        setAutosaveRecoverCandidate(null);
+                        setStatus(currentLang === "ar" ? "تمت استعادة جلسة العمل السابقة بنجاح" : "Recovered previous session");
+                      } catch {
+                        setAutosaveRecoverCandidate(null);
+                      }
+                    }}
+                  >
+                    {currentLang === "ar" ? "استعادة الجلسة" : "Recover Session"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ padding: "4px 8px", fontSize: "12px", height: "auto" }}
+                    onClick={() => {
+                      clearAutosaveRecovery();
+                      setAutosaveRecoverCandidate(null);
+                    }}
+                  >
+                    {currentLang === "ar" ? "تجاهل" : "Dismiss"}
+                  </button>
+                </div>
+              )}
+
               {/* Phase 2: Toggleable Grid */}
               {showGrid && <div className="stage-grid" />}
 
@@ -5386,6 +6580,11 @@ export default function Home() {
                   aria-label="مساحة تحرير الصورة"
                   className="canvas-checkerboard"
                   style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenuPos({ x: e.clientX, y: e.clientY });
+                    setIsContextMenuOpen(true);
+                  }}
                   onPointerDown={startDrawing}
                   onPointerMove={(e) => {
                     const pt = pointFromPointer(e);
@@ -5457,7 +6656,19 @@ export default function Home() {
                       height: `${(selection.height / Math.max(1, canvasRef.current?.height || 1)) * 100}%`
                     }}
                   >
-                    <span>{activeTool === "crop" ? `منطقة القص: ${Math.round(selection.width)} × ${Math.round(selection.height)}` : selectionShape === "ellipse" ? "تحديد بيضاوي" : selectionShape === "free" ? "تحديد حر" : "تحديد مستطيل"}</span>
+                    {activeTool === "crop" ? (
+                      <>
+                        <div className="crop-grid-line-h1" />
+                        <div className="crop-grid-line-h2" />
+                        <div className="crop-grid-line-v1" />
+                        <div className="crop-grid-line-v2" />
+                        <div className="crop-badge-hud">
+                          ✂️ {Math.round(selection.width)} × {Math.round(selection.height)} px
+                        </div>
+                      </>
+                    ) : (
+                      <span>{selectionShape === "ellipse" ? "تحديد بيضاوي" : selectionShape === "free" ? "تحديد حر" : "تحديد مستطيل"}</span>
+                    )}
                   </div>
                 )}
 
@@ -6014,552 +7225,967 @@ export default function Home() {
                 </>
               ) : (
                 <div className="properties-panel">
-                  <div className="panel-heading">
-                    <span>التعديلات اللونية والخصائص</span>
-                    <button onClick={resetAdjustments} title="إعادة ضبط جميع التعديلات">
-                      <RotateCcw size={14} />
-                    </button>
-                  </div>
-                  {/* Point 5: Live Histogram Viewer */}
-                  <HistogramViewer data={histogramData} />
-
-                  <Adjustment label="السطوع (Brightness)" value={brightness} min={-100} max={100} defaultValue={0} onChange={setBrightness} />
-                  <Adjustment label="التباين (Contrast)" value={contrast} min={-100} max={100} defaultValue={0} onChange={setContrast} />
-                  <Adjustment label="التعريض (Exposure)" value={exposure} min={-100} max={100} defaultValue={0} onChange={setExposure} />
-                  <Adjustment label="تدرج اللون (Hue)" value={hue} min={-180} max={180} defaultValue={0} unit="°" onChange={setHue} />
-                  <Adjustment label="التشبع اللوني (Saturation)" value={saturation} min={0} max={200} defaultValue={100} unit="%" onChange={setSaturation} />
-                  <Adjustment label="حرارة اللون (Temperature)" value={temperature} min={-100} max={100} defaultValue={0} onChange={setTemperature} />
-                  <Adjustment label="منحنى جاما (Gamma)" value={gamma} min={0.2} max={2.5} step={0.05} defaultValue={1.0} onChange={setGamma} />
-
-                  <div className="panel-heading" style={{ marginTop: "10px" }}>
-                    <span>توازن الألوان (Color Balance)</span>
-                  </div>
-                  <Adjustment label="الأحمر (Red Balance)" value={colorBalanceR} min={-100} max={100} defaultValue={0} onChange={setColorBalanceR} />
-                  <Adjustment label="الأخضر (Green Balance)" value={colorBalanceG} min={-100} max={100} defaultValue={0} onChange={setColorBalanceG} />
-                  <Adjustment label="الأزرق (Blue Balance)" value={colorBalanceB} min={-100} max={100} defaultValue={0} onChange={setColorBalanceB} />
-
-                  <div className="panel-heading" style={{ marginTop: "10px" }}>
-                    <span>تأثيرات نغمية أحادية</span>
-                  </div>
-                  <Adjustment label="تدرج رمادي (Grayscale)" value={grayscale} min={0} max={100} defaultValue={0} unit="%" onChange={setGrayscale} />
-                  <Adjustment label="السيبيا (Sepia)" value={sepia} min={0} max={100} defaultValue={0} unit="%" onChange={setSepia} />
-                  <Adjustment label="العكس اللوني (Invert)" value={invert} min={0} max={100} defaultValue={0} unit="%" onChange={setInvert} />
-
-                  {/* Point 7: Digital Art & Shapes Studio */}
-                  <div className="panel-heading" style={{ marginTop: "14px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "12px" }}>
-                    <span>ستوديو أدوات الرسم والتلوين (Drawing Studio)</span>
+                  {/* Studio Quick Actions: AI Cutout, Blend Two Images, Watermark (Inside Properties Tab) */}
+                  <div className="sidebar-studio-actions">
                     <button
-                      onClick={() => {
-                        setBrushSize(16);
-                        setBrushOpacity(100);
-                        setBrushHardness(100);
-                        resetColors();
-                        setStatus("تمت إعادة ضبط إعدادات الرسم الافتراضية");
-                      }}
-                      title="إعادة ضبط إعدادات الرسم"
+                      type="button"
+                      className="sidebar-studio-btn sidebar-studio-btn-ai"
+                      onClick={handlePureContentCutout}
+                      title="عزل العنصر الأساسي بالذكاء الاصطناعي بدقة متناهية"
                     >
-                      <RotateCcw size={13} />
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <WandSparkles size={14} />
+                        <span>عزل بالذكاء الاصطناعي</span>
+                      </span>
+                      <span style={{ fontSize: "10px", opacity: 0.85, background: "rgba(6,182,212,0.2)", padding: "1px 6px", borderRadius: "4px" }}>AI Magic</span>
                     </button>
-                  </div>
 
-                  {/* Quick Color Palette & Swatches */}
-                  <div style={{ padding: "0 17px", marginBottom: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600 }}>لوحة الألوان والتبديل</span>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <button
-                          type="button"
-                          onClick={swapColors}
-                          title="تبديل الأمامي والخلفي (X)"
-                          style={{
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                            color: "#e2e8f0",
-                            borderRadius: "4px",
-                            padding: "2px 6px",
-                            fontSize: "10px",
-                            cursor: "pointer"
-                          }}
-                        >
-                          تبديل (X)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={resetColors}
-                          title="استعادة الافتراضي (D)"
-                          style={{
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                            color: "#e2e8f0",
-                            borderRadius: "4px",
-                            padding: "2px 6px",
-                            fontSize: "10px",
-                            cursor: "pointer"
-                          }}
-                        >
-                          افتراضي (D)
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="color-palette-grid">
-                      {["#2dd4bf", "#3b82f6", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#eab308", "#22c55e", "#ffffff", "#000000"].map((clr) => (
-                        <button
-                          key={clr}
-                          type="button"
-                          className={`color-preset-dot ${foregroundColor.toLowerCase() === clr.toLowerCase() ? "active" : ""}`}
-                          style={{ backgroundColor: clr }}
-                          onClick={() => {
-                            setForegroundColor(clr);
-                            setStatus(`تم اختيار اللون: ${clr.toUpperCase()}`);
-                          }}
-                          title={`اختيار اللون ${clr}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Brush / Stroke Controls */}
-                  <Adjustment label="حجم الفرشاة / القلم (Brush Size)" value={brushSize} min={1} max={120} defaultValue={16} unit="px" onChange={setBrushSize} />
-                  <Adjustment label="شفافية وعتامة الرسم (Opacity)" value={brushOpacity} min={10} max={100} defaultValue={100} unit="%" onChange={setBrushOpacity} />
-                  <Adjustment label="صلابة حواف الفرشاة (Hardness)" value={brushHardness} min={0} max={100} defaultValue={100} unit="%" onChange={setBrushHardness} />
-
-                  {/* Shapes Selection Section */}
-                  <div style={{ padding: "8px 17px", marginTop: "4px" }}>
-                    <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginBottom: "6px" }}>
-                      نوع الشكل الهندسي (Shape Type)
-                    </div>
-                    <div className="shape-selector-group">
-                      {[
-                        { id: "rectangle" as ShapeType, label: "مستطيل" },
-                        { id: "ellipse" as ShapeType, label: "بيضاوي" },
-                        { id: "line" as ShapeType, label: "خط" },
-                        { id: "triangle" as ShapeType, label: "مثلث" },
-                        { id: "polygon" as ShapeType, label: "نجمة / مضلع" },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`shape-btn ${activeShapeType === item.id ? "active" : ""}`}
-                          onClick={() => {
-                            setActiveShapeType(item.id);
-                            setActiveTool("shape");
-                            setStatus(`تم اختيار أداة رسم شكل: ${item.label}`);
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginTop: "8px", marginBottom: "6px" }}>
-                      نمط تعبئة الشكل (Fill Mode)
-                    </div>
-                    <div className="shape-selector-group" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-                      {[
-                        { id: "stroke" as ShapeFillMode, label: "إطار فقط" },
-                        { id: "fill" as ShapeFillMode, label: "تعبئة فقط" },
-                        { id: "both" as ShapeFillMode, label: "إطار وتعبئة" },
-                      ].map((mode) => (
-                        <button
-                          key={mode.id}
-                          type="button"
-                          className={`shape-btn ${shapeFillMode === mode.id ? "active" : ""}`}
-                          onClick={() => {
-                            setShapeFillMode(mode.id);
-                            setStatus(`تم تغيير نمط الشكل إلى: ${mode.label}`);
-                          }}
-                        >
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Point 8: Retouching & Defect Removal Studio */}
-                  <div className="panel-heading" style={{ marginTop: "14px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "12px" }}>
-                    <span>ستوديو التنقيح وإزالة العيوب (Retouching Studio)</span>
                     <button
-                      onClick={() => {
-                        setCloneSource(null);
-                        setRetouchRadius(24);
-                        setRetouchOpacity(100);
-                        setRetouchHardness(80);
-                        setSkinSmoothIntensity(60);
-                        setBgRemoveTolerance(30);
-                        setStatus("تمت إعادة ضبط إعدادات التنقيح الافتراضية");
-                      }}
-                      title="إعادة ضبط إعدادات التنقيح"
+                      type="button"
+                      className="sidebar-studio-btn"
+                      onClick={() => setIsBlendModalOpen(true)}
+                      title="دمج صورتين ومزج الطبقات باحترافية"
                     >
-                      <RotateCcw size={13} />
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Combine size={14} />
+                        <span>دمج صورتين</span>
+                      </span>
+                      <span style={{ fontSize: "10px", opacity: 0.7 }}>مزج</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="sidebar-studio-btn"
+                      onClick={() => setIsWatermarkOpen(true)}
+                      title="إضافة وتخصيص العلامة المائية لحماية الحقوق"
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Sparkles size={14} />
+                        <span>العلامة المائية</span>
+                      </span>
+                      <span style={{ fontSize: "10px", opacity: 0.7 }}>حماية</span>
                     </button>
                   </div>
 
-                  <div style={{ padding: "0 17px", marginBottom: "10px" }}>
-                    <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginBottom: "6px" }}>
-                      أدوات المعالجة والتنقيح الموضعية
-                    </div>
-                    <div className="retouch-actions-grid">
-                      <button
-                        type="button"
-                        className={`retouch-card-btn ${activeTool === "clone" ? "active" : ""}`}
-                        onClick={() => {
-                          activateTool("clone");
-                          setRetouchMode("clone");
-                        }}
-                        title="ختم الاستنساخ: اضغط Alt+النقر لتحديد المصدر ثم اسحب للنسخ"
-                      >
-                        <Stamp size={15} />
-                        <span>ختم الاستنساخ (S)</span>
-                        <span className={`retouch-badge ${cloneSource ? "highlight" : ""}`}>
-                          {cloneSource ? `المصدر: ${Math.round(cloneSource.x)},${Math.round(cloneSource.y)}` : "Alt+انقر للمصدر"}
-                        </span>
-                      </button>
+                  {/* Automated Sub-navigation segmented control (Pixelora / Canva Style) */}
+                  <div className="properties-sub-nav">
+                    <button
+                      type="button"
+                      className={`properties-sub-pill ${propertiesSection === "brush" ? "active" : ""}`}
+                      onClick={() => { setPropertiesSection("brush"); setStatus("أدوات الفرشاة والرسم"); }}
+                    >
+                      <span>🎨</span>
+                      <span>الفرشاة</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`properties-sub-pill ${propertiesSection === "color" ? "active" : ""}`}
+                      onClick={() => { setPropertiesSection("color"); setStatus("التعديلات اللونية والإضاءة"); }}
+                    >
+                      <span>☀️</span>
+                      <span>الألوان</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`properties-sub-pill ${propertiesSection === "filters" ? "active" : ""}`}
+                      onClick={() => { setPropertiesSection("filters"); setStatus("معرض الفلاتر الحية"); }}
+                    >
+                      <span>🎭</span>
+                      <span>الفلاتر</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`properties-sub-pill ${propertiesSection === "ai" ? "active" : ""}`}
+                      onClick={() => { setPropertiesSection("ai"); setStatus("ستوديو الذكاء الاصطناعي والتنقيح"); }}
+                    >
+                      <span>✨</span>
+                      <span>الذكاء AI</span>
+                    </button>
+                  </div>
 
-                      <button
-                        type="button"
-                        className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "heal" ? "active" : ""}`}
-                        onClick={() => {
-                          activateTool("heal");
-                          setRetouchMode("heal");
-                          setStatus("فرشاة المعالجة نشطة — اضغط Alt+النقر لتحديد عينة النسيج، ثم انقر لمزجها مع الإضاءة");
-                        }}
-                        title="فرشاة المعالجة: دمج النسيج مع الإضاءة المحلية"
-                      >
-                        <Sparkles size={15} />
-                        <span>فرشاة المعالجة (J)</span>
-                        <span className="retouch-badge">مزج النسيج</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "spot" ? "active" : ""}`}
-                        onClick={() => {
-                          activateTool("heal");
-                          setRetouchMode("spot");
-                          setStatus("أداة معالجة البقع الفورية جاهزة — انقر مباشرة على أي بقعة أو عيب لإزالته");
-                        }}
-                        title="إزالة البقع الفورية: نقرة واحدة على البقعة لإزالتها"
-                      >
-                        <CircleDot size={15} />
-                        <span>إزالة البقع (Spot)</span>
-                        <span className="retouch-badge">نقرة واحدة</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "redeye" ? "active" : ""}`}
-                        onClick={() => {
-                          activateTool("heal");
-                          setRetouchMode("redeye");
-                          setStatus("أداة إزالة العين الحمراء نشطة — انقر على بؤبؤ العين لقمع الاحمرار فورياً");
-                        }}
-                        title="إزالة العين الحمراء: نقرة على البؤبؤ"
-                      >
-                        <Crosshair size={15} />
-                        <span>العين الحمراء</span>
-                        <span className="retouch-badge">تصحيح البؤبؤ</span>
-                      </button>
-                    </div>
-
-                    <Adjustment label="نصف قطر الأداة (Radius)" value={retouchRadius} min={4} max={80} defaultValue={24} unit="px" onChange={setRetouchRadius} />
-                    <Adjustment label="عتامة التنقيح (Opacity)" value={retouchOpacity} min={10} max={100} defaultValue={100} unit="%" onChange={setRetouchOpacity} />
-                    <Adjustment label="صلابة حواف التنقيح (Hardness)" value={retouchHardness} min={0} max={100} defaultValue={80} unit="%" onChange={setRetouchHardness} />
-
-                    <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginTop: "10px", marginBottom: "6px" }}>
-                      معالجات ذكية متقدمة (Smart Retouch Actions)
-                    </div>
-
-                    {/* Skin Smoothing Card */}
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                      <Adjustment label="شدة تنعيم البشرة (Skin Smooth)" value={skinSmoothIntensity} min={10} max={100} defaultValue={60} unit="%" onChange={setSkinSmoothIntensity} />
-                      <button
-                        type="button"
-                        className="retouch-action-submit-btn"
-                        onClick={handleApplySkinSmoothing}
-                        title="تنعيم مسام البشرة مع الحفاظ التام على ملامح العيون والشفاه والشعر"
-                      >
-                        <Sparkles size={13} /> تطبيق تنعيم البشرة الذكي
-                      </button>
-                    </div>
-
-                    {/* Content-Aware Inpainting Fill Card */}
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                      <div style={{ fontSize: "10px", color: "#8fa9a3", marginBottom: "4px" }}>
-                        {selection ? `التحديد نشط (${Math.round(selection.width)}×${Math.round(selection.height)}px)` : "حدد عنصراً بأداة التحديد (V) أولاً للملء"}
-                      </div>
-                      <button
-                        type="button"
-                        className="retouch-action-submit-btn"
-                        onClick={handleApplyInpaint}
-                        title="إزالة العنصر أو العيب من منطقة التحديد وملؤه بالنسيج المحيط"
-                      >
-                        <WandSparkles size={13} /> ملء وإزالة العنصر المحدد (Inpaint)
-                      </button>
-                    </div>
-
-                    {/* ─────── Professional Subject Extraction & Background Effects Panel ─────── */}
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(45,212,191,0.25)", borderRadius: "8px", padding: "10px", marginBottom: "12px" }}>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "#2dd4bf", marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                          <WandSparkles size={13} /> عزل الأجسام وتأثيرات الخلفية (AI Cutout & Bokeh)
-                        </span>
-                        <span style={{ fontSize: "8px", background: "rgba(45,212,191,0.18)", border: "1px solid rgba(45,212,191,0.4)", borderRadius: "4px", color: "#5eead4", padding: "1px 6px", fontWeight: 700 }}>
-                          ⚡ NEURAL IS-NET
-                        </span>
+                  {/* ─── القسم 1: أدوات الفرشاة والرسم المتطورة ─── */}
+                  {propertiesSection === "brush" && (
+                    <>
+                      <div className="panel-heading">
+                        <span>ستوديو أدوات الرسم والتلوين</span>
+                        <button
+                          onClick={() => {
+                            setBrushSize(16);
+                            setBrushOpacity(100);
+                            setBrushHardness(100);
+                            resetColors();
+                            setStatus("تمت إعادة ضبط إعدادات الرسم الافتراضية");
+                          }}
+                          title="إعادة ضبط إعدادات الرسم"
+                        >
+                          <RotateCcw size={13} />
+                        </button>
                       </div>
 
-                      {/* Engine Status Banner */}
-                      <div style={{ fontSize: "9px", color: "#a8c4be", marginBottom: "8px", background: "rgba(45,212,191,0.06)", border: "1px solid rgba(45,212,191,0.2)", padding: "6px 8px", borderRadius: "5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "12px" }}>🤖</span>
-                        <span><strong>محرك الذكاء الاصطناعي العصبي مفعّل:</strong> عزل دقيق لأدق خصلات الشعر والملابس والبورتريه بدون أي تشويه.</span>
+                      {/* Pixelora Style Brush Presets Grid */}
+                      <div className="sb-section-label" style={{ padding: "0 16px 6px" }}>
+                        نوع الفرشاة والرسم
+                      </div>
+                      <div className="brush-presets-grid">
+                        {BRUSH_PRESETS.map((preset) => (
+                          <div
+                            key={preset.id}
+                            className={`brush-preset-card ${activeBrushPreset === preset.id ? "active" : ""}`}
+                            onClick={() => handleSelectBrushPreset(preset.id)}
+                          >
+                            <span className="brush-preset-icon">{preset.icon}</span>
+                            <span className="brush-preset-label">{preset.label}</span>
+                          </div>
+                        ))}
                       </div>
 
-                      {/* Active AI Progress Bar */}
-                      {aiProcessing && (
-                        <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.1)", border: "1px solid rgba(45,212,191,0.35)", borderRadius: "6px", padding: "8px 10px" }}>
-                          <div style={{ fontSize: "10px", color: "#2dd4bf", marginBottom: "4px", display: "flex", justifyContent: "space-between" }}>
-                            <span>⚙️ {aiTask || "جاري المعالجة بالذكاء الاصطناعي..."}</span>
-                            <span>{aiProgress}%</span>
-                          </div>
-                          <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "3px", height: "5px", overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${aiProgress}%`, background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #3b82f6)", borderRadius: "3px", transition: "width 0.25s ease" }} />
-                          </div>
-                        </div>
-                      )}
+                      {/* Pixelora Style Live Brush Preview Capsule */}
+                      <LiveBrushPreview
+                        color={foregroundColor}
+                        size={brushSize}
+                        opacity={brushOpacity}
+                        hardness={brushHardness}
+                        preset={activeBrushPreset}
+                      />
 
-                      {/* Sliders */}
-                      <Adjustment label="قوة تمويه الخلفية (Bokeh Radius)" value={bgBlurRadius} min={5} max={50} defaultValue={20} onChange={setBgBlurRadius} />
-                      <Adjustment label="تنعيم وصقل الحواف (Edge Feather)" value={bgFeather} min={0} max={8} defaultValue={3} onChange={setBgFeather} />
-                      <Adjustment label="حساسية العزل الإضافية (Tolerance)" value={bgRemoveTolerance} min={10} max={70} defaultValue={30} onChange={setBgRemoveTolerance} />
-
-                      {/* Smart Hint */}
-                      <div style={{ fontSize: "9px", color: "#6a8c85", margin: "6px 0 10px 0", background: "rgba(45,212,191,0.03)", padding: "5px 8px", borderRadius: "5px", border: "1px dashed rgba(45,212,191,0.2)" }}>
-                        💡 <strong>طريقة العمل:</strong> انقر مباشرة على أي زر أدناه لمعالجة الصورة كاملة بالذكاء الاصطناعي، أو حدد جزءاً بأداة التحريك (V) لعزل منطقة معينة فقط.
-                      </div>
-
-                      {/* ─── بطاقة التحكم في المحتوى المعزول الحر (Floating Subject Controller) ─── */}
-                      {floatingSubject && (
-                        <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.08)", border: "1px solid rgba(45,212,191,0.5)", borderRadius: "8px", padding: "8px 10px" }}>
-                          <div style={{ fontSize: "10.5px", color: "#5eead4", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                              <Move size={13} /> <span>المحتوى المعزول (حر ومستقل):</span>
-                            </span>
-                            <span style={{ fontSize: "8.5px", background: "rgba(45,212,191,0.2)", padding: "2px 6px", borderRadius: "3px", color: "#a7f3d0" }}>
-                              {floatingSubject.width}×{floatingSubject.height}px ({Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%)
-                            </span>
-                          </div>
-
-                          {/* ─── قسم تكبير وتصغير المحتوى (Scale & Resize) ─── */}
-                          <div style={{ marginBottom: "8px", background: "rgba(15,23,42,0.45)", borderRadius: "6px", padding: "6px 8px", border: "1px solid rgba(45,212,191,0.25)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "9.5px", color: "#99f6e4", fontWeight: 600 }}>🔍 تكبير وتصغير الحجم:</span>
-                              <span style={{ fontSize: "9.5px", color: "#5eead4", fontWeight: 700 }}>
-                                {Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%
-                              </span>
-                            </div>
-                            <input
-                              type="range"
-                              min={10}
-                              max={300}
-                              step={5}
-                              value={Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}
-                              onChange={(e) => handleScaleSubject(Number(e.target.value))}
-                              style={{ width: "100%", accentColor: "#2dd4bf", cursor: "pointer", height: "4px", margin: "3px 0 6px 0" }}
-                            />
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "3px" }}>
-                              <button
-                                type="button"
-                                className="retouch-action-submit-btn"
-                                onClick={() => handleScaleSubjectDelta(-10)}
-                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
-                                title="تصغير المحتوى بنسبة 10%"
-                              >
-                                ➖ -10%
-                              </button>
-                              <button
-                                type="button"
-                                className="retouch-action-submit-btn"
-                                onClick={() => handleScaleSubjectDelta(10)}
-                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
-                                title="تكبير المحتوى بنسبة 10%"
-                              >
-                                ➕ +10%
-                              </button>
-                              <button
-                                type="button"
-                                className="retouch-action-submit-btn"
-                                onClick={() => handleScaleSubject(100)}
-                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
-                                title="إعادة الحجم الأصلي 100%"
-                              >
-                                🔄 100%
-                              </button>
-                              <button
-                                type="button"
-                                className="retouch-action-submit-btn"
-                                onClick={handleFitSubjectToCanvas}
-                                style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
-                                title="ملاءمة الحجم داخل الكانفاس"
-                              >
-                                📐 ملء
-                              </button>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: "8.5px", color: "#99f6e4", marginBottom: "5px", lineHeight: "1.3" }}>
-                            🎯 <strong>التحريك والمحاذاة:</strong> اسحب الشخص مباشرة بالماوس، أو اضبط المحاذاة:
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "6px" }}>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("center")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="توسيط المحتوى في منتصف الكانفاس">
-                              🎯 توسيط
-                            </button>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("right")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليمين">
-                              ➡️ يمين
-                            </button>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("left")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليسار">
-                              ⬅️ يسار
-                            </button>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("top")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأعلى">
-                              ⬆️ أعلى
-                            </button>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("bottom")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأسفل">
-                              ⬇️ أسفل
-                            </button>
-                            <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("reset")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="إعادة ضبط موضع المحتوى">
-                              🔄 ضبط
-                            </button>
-                          </div>
-                          <div style={{ marginBottom: "6px" }}>
+                      {/* Quick Color Palette & Swatches */}
+                      <div style={{ padding: "0 17px", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span className="sb-section-label">لوحة الألوان والتبديل</span>
+                          <div style={{ display: "flex", gap: "6px" }}>
                             <button
                               type="button"
-                              className="retouch-action-submit-btn"
-                              onClick={handleFitCanvasToSubject}
-                              style={{
-                                width: "100%",
-                                justifyContent: "center",
-                                fontSize: "9.5px",
-                                padding: "6px 8px",
-                                background: "rgba(234,179,8,0.15)",
-                                border: "1px solid rgba(234,179,8,0.45)",
-                                color: "#fef08a",
-                                fontWeight: 700
-                              }}
-                              title="اقتصاص مساحة العمل بالكامل لتطابق أبعاد المحتوى الصافي تماماً وحذف أي مساحة فارغة خارجية"
+                              onClick={swapColors}
+                              title="تبديل الأمامي والخلفي (X)"
+                              className="sb-ghost-btn"
                             >
-                              ✂️ اقتصاص مساحة العمل للمحتوى الصافي
+                              تبديل (X)
                             </button>
+                            <button
+                              type="button"
+                              onClick={resetColors}
+                              title="استعادة الافتراضي (D)"
+                              className="sb-ghost-btn"
+                            >
+                              افتراضي (D)
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="color-palette-grid">
+                          {["#2dd4bf", "#3b82f6", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#eab308", "#22c55e", "#ffffff", "#000000"].map((clr) => (
+                            <button
+                              key={clr}
+                              type="button"
+                              className={`color-preset-dot ${foregroundColor.toLowerCase() === clr.toLowerCase() ? "active" : ""}`}
+                              style={{ backgroundColor: clr }}
+                              onClick={() => {
+                                setForegroundColor(clr);
+                                setStatus(`تم اختيار اللون: ${clr.toUpperCase()}`);
+                              }}
+                              title={`اختيار اللون ${clr}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Brush / Stroke Controls */}
+                      <Adjustment label="حجم الفرشاة / القلم (Brush Size)" value={brushSize} min={1} max={120} defaultValue={16} unit="px" onChange={setBrushSize} />
+                      <Adjustment label="شفافية وعتامة الرسم (Opacity)" value={brushOpacity} min={10} max={100} defaultValue={100} unit="%" onChange={setBrushOpacity} />
+                      <Adjustment label="صلابة حواف الفرشاة (Hardness)" value={brushHardness} min={0} max={100} defaultValue={100} unit="%" onChange={setBrushHardness} />
+
+                      {/* Shapes Selection Section */}
+                      <div style={{ padding: "8px 17px", marginTop: "4px" }}>
+                        <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginBottom: "6px" }}>
+                          نوع الشكل الهندسي (Shape Type)
+                        </div>
+                        <div className="shape-selector-group">
+                          {[
+                            { id: "rectangle" as ShapeType, label: "مستطيل" },
+                            { id: "ellipse" as ShapeType, label: "بيضاوي" },
+                            { id: "line" as ShapeType, label: "خط" },
+                            { id: "triangle" as ShapeType, label: "مثلث" },
+                            { id: "polygon" as ShapeType, label: "نجمة / مضلع" },
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`shape-btn ${activeShapeType === item.id ? "active" : ""}`}
+                              onClick={() => {
+                                setActiveShapeType(item.id);
+                                setActiveTool("shape");
+                                setStatus(`تم اختيار أداة رسم شكل: ${item.label}`);
+                              }}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginTop: "8px", marginBottom: "6px" }}>
+                          نمط تعبئة الشكل (Fill Mode)
+                        </div>
+                        <div className="shape-selector-group" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                          {[
+                            { id: "stroke" as ShapeFillMode, label: "إطار فقط" },
+                            { id: "fill" as ShapeFillMode, label: "تعبئة فقط" },
+                            { id: "both" as ShapeFillMode, label: "إطار وتعبئة" },
+                          ].map((mode) => (
+                            <button
+                              key={mode.id}
+                              type="button"
+                              className={`shape-btn ${shapeFillMode === mode.id ? "active" : ""}`}
+                              onClick={() => {
+                                setShapeFillMode(mode.id);
+                                setStatus(`تم تغيير نمط الشكل إلى: ${mode.label}`);
+                              }}
+                            >
+                              {mode.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Phase 11: Text Editor Panel */}
+                      {(() => {
+                        const activeTextItem = textElements.find((item) => item.id === selectedTextId);
+                        if (!activeTextItem) return null;
+                        return (
+                          <div className="text-editor-panel" style={{ display: "flex", flexDirection: "column", gap: "8px", background: "rgba(45,212,191,0.04)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(45,212,191,0.25)", margin: "8px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: "11px", fontWeight: "bold", color: "#2dd4bf" }}>تحرير النص — المرحلة 11</span>
+                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>نص مستقل</span>
+                            </div>
+
+                            {/* Text Content */}
+                            <input
+                              value={activeTextItem.text}
+                              onChange={(event) => updateText(event.target.value)}
+                              aria-label="محتوى النص"
+                              placeholder="اكتب النص هنا"
+                              className="modal-input"
+                              style={{ fontSize: "12px", padding: "6px 8px", direction: "rtl" }}
+                            />
+
+                            {/* Font Family */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3", minWidth: "45px" }}>الخط:</span>
+                              <select
+                                value={activeTextItem.fontFamily ?? "Cairo"}
+                                onChange={(e) => { updateTextProp("fontFamily", e.target.value); ensureFontLoaded(e.target.value); }}
+                                className="blend-select"
+                                style={{ fontSize: "11px", flex: 1 }}
+                              >
+                                {GOOGLE_FONTS.map(f => (
+                                  <option key={f.name} value={f.name}>{f.label}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Font Size */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3" }}>الحجم:</span>
+                              <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{Math.round(activeTextItem.size)}px</output>
+                            </div>
+                            <Slider value={[activeTextItem.size]} min={12} max={300} step={1} onValueChange={(vals) => updateTextSize(vals[0])} />
+
+                            {/* Font Weight + Style + Align */}
+                            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                              {(["normal", "600", "bold", "800"] as const).map(w => (
+                                <button key={w} type="button" className={`preset-chip-btn ${(activeTextItem.fontWeight ?? "600") === w ? "active" : ""}`} onClick={() => updateTextProp("fontWeight", w)} style={{ fontWeight: w }}>{w === "normal" ? "رفيع" : w === "600" ? "متوسط" : w === "bold" ? "عريض" : "أعرض"}</button>
+                              ))}
+                              <button type="button" className={`preset-chip-btn ${activeTextItem.fontStyle === "italic" ? "active" : ""}`} onClick={() => updateTextProp("fontStyle", activeTextItem.fontStyle === "italic" ? "normal" : "italic")} style={{ fontStyle: "italic" }}>مائل</button>
+                            </div>
+
+                            {/* Text Align */}
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              {(["right", "center", "left"] as const).map(a => (
+                                <button key={a} type="button" className={`preset-chip-btn ${(activeTextItem.textAlign ?? "center") === a ? "active" : ""}`} onClick={() => updateTextProp("textAlign", a)}>
+                                  {a === "right" ? "⇒ يمين" : a === "center" ? "⇔ وسط" : "⇐ يسار"}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Letter Spacing */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3" }}>تباعد الحروف:</span>
+                              <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{activeTextItem.letterSpacing ?? 0}px</output>
+                            </div>
+                            <Slider value={[activeTextItem.letterSpacing ?? 0]} min={-5} max={30} step={0.5} onValueChange={(vals) => updateTextProp("letterSpacing", vals[0])} />
+
+                            {/* Rotation */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3" }}>التدوير:</span>
+                              <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{activeTextItem.rotation ?? 0}°</output>
+                            </div>
+                            <Slider value={[activeTextItem.rotation ?? 0]} min={-180} max={180} step={1} onValueChange={(vals) => updateTextProp("rotation", vals[0])} />
+
+                            {/* Color */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3" }}>لون الخط:</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input type="color" value={activeTextItem.color} onChange={(e) => updateTextColor(e.target.value)} style={{ width: "26px", height: "24px", padding: 0, border: "none", borderRadius: "4px", cursor: "pointer", background: "transparent" }} title="اختر لون الخط" />
+                                <span style={{ fontSize: "10px", color: "#c8d9d5", fontFamily: "monospace" }}>{activeTextItem.color.toUpperCase()}</span>
+                              </div>
+                            </div>
+
+                            {/* Text Effects */}
+                            <div style={{ fontSize: "10px", fontWeight: "bold", color: "#2dd4bf", marginTop: "4px", borderTop: "1px solid rgba(45,212,191,0.2)", paddingTop: "6px" }}>تأثيرات النص</div>
+
+                            {/* Shadow */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <input type="checkbox" id="shadow-enable" checked={!!activeTextItem.shadowEnabled} onChange={(e) => updateTextProp("shadowEnabled", e.target.checked)} />
+                              <label htmlFor="shadow-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>ظل (Shadow)</label>
+                              {activeTextItem.shadowEnabled && (
+                                <>
+                                  <input type="color" value={activeTextItem.shadowColor ?? "#000000"} onChange={(e) => updateTextProp("shadowColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون الظل" />
+                                  <span style={{ fontSize: "9px", color: "#6a8c85" }}>إزاحة: X</span>
+                                  <input type="number" value={activeTextItem.shadowOffsetX ?? 3} onChange={(e) => updateTextProp("shadowOffsetX", Number(e.target.value))} style={{ width: "38px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
+                                  <span style={{ fontSize: "9px", color: "#6a8c85" }}>Y</span>
+                                  <input type="number" value={activeTextItem.shadowOffsetY ?? 3} onChange={(e) => updateTextProp("shadowOffsetY", Number(e.target.value))} style={{ width: "38px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
+                                </>
+                              )}
+                            </div>
+
+                            {/* Stroke (Outline) */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <input type="checkbox" id="stroke-enable" checked={!!activeTextItem.strokeEnabled} onChange={(e) => updateTextProp("strokeEnabled", e.target.checked)} />
+                              <label htmlFor="stroke-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>حدود (Stroke)</label>
+                              {activeTextItem.strokeEnabled && (
+                                <>
+                                  <input type="color" value={activeTextItem.strokeColor ?? "#000000"} onChange={(e) => updateTextProp("strokeColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون الحدود" />
+                                  <span style={{ fontSize: "9px", color: "#6a8c85" }}>سُمك:</span>
+                                  <input type="number" min={1} max={20} value={activeTextItem.strokeWidth ?? 2} onChange={(e) => updateTextProp("strokeWidth", Number(e.target.value))} style={{ width: "40px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
+                                </>
+                              )}
+                            </div>
+
+                            {/* Glow */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <input type="checkbox" id="glow-enable" checked={!!activeTextItem.glowEnabled} onChange={(e) => updateTextProp("glowEnabled", e.target.checked)} />
+                              <label htmlFor="glow-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>توهج (Glow)</label>
+                              {activeTextItem.glowEnabled && (
+                                <>
+                                  <input type="color" value={activeTextItem.glowColor ?? "#00ffff"} onChange={(e) => updateTextProp("glowColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون التوهج" />
+                                  <span style={{ fontSize: "9px", color: "#6a8c85" }}>قوة:</span>
+                                  <input type="number" min={1} max={50} value={activeTextItem.glowBlur ?? 15} onChange={(e) => updateTextProp("glowBlur", Number(e.target.value))} style={{ width: "40px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
+                                </>
+                              )}
+                            </div>
+
+                            {/* Gradient */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                              <input type="checkbox" id="grad-enable" checked={!!activeTextItem.gradientEnabled} onChange={(e) => updateTextProp("gradientEnabled", e.target.checked)} />
+                              <label htmlFor="grad-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>تدرج لوني (Gradient)</label>
+                              {activeTextItem.gradientEnabled && (
+                                <>
+                                  <input type="color" value={activeTextItem.gradientColor1 ?? activeTextItem.color} onChange={(e) => updateTextProp("gradientColor1", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="اللون الأول" />
+                                  <span style={{ fontSize: "9px", color: "#6a8c85" }}>→</span>
+                                  <input type="color" value={activeTextItem.gradientColor2 ?? "#ff6b6b"} onChange={(e) => updateTextProp("gradientColor2", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="اللون الثاني" />
+                                </>
+                              )}
+                            </div>
+
+                            {/* Position Arrows */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                              <span style={{ fontSize: "10px", color: "#8fa9a3" }}>موضع النص:</span>
+                              <div style={{ display: "flex", gap: "4px" }}>
+                                <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(0, -15)} title="تحريك لأعلى">↑</button>
+                                <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(0, 15)} title="تحريك لأسفل">↓</button>
+                                <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(-15, 0)} title="تحريك لليمين">←</button>
+                                <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(15, 0)} title="تحريك لليسار">→</button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+
+                  {/* ─── القسم 2: التعديلات اللونية والإضاءة ─── */}
+                  {propertiesSection === "color" && (
+                    <>
+                      <div className="panel-heading">
+                        <span>التعديلات اللونية والخصائص</span>
+                        <button onClick={resetAdjustments} title="إعادة ضبط جميع التعديلات">
+                          <RotateCcw size={14} />
+                        </button>
+                      </div>
+                      {/* Point 5: Live Histogram Viewer */}
+                      <HistogramViewer data={histogramData} />
+
+                      <Adjustment label="السطوع (Brightness)" value={brightness} min={-100} max={100} defaultValue={0} onChange={setBrightness} />
+                      <Adjustment label="التباين (Contrast)" value={contrast} min={-100} max={100} defaultValue={0} onChange={setContrast} />
+                      <Adjustment label="التعريض (Exposure)" value={exposure} min={-100} max={100} defaultValue={0} onChange={setExposure} />
+                      <Adjustment label="تدرج اللون (Hue)" value={hue} min={-180} max={180} defaultValue={0} unit="°" onChange={setHue} />
+                      <Adjustment label="التشبع اللوني (Saturation)" value={saturation} min={0} max={200} defaultValue={100} unit="%" onChange={setSaturation} />
+                      <Adjustment label="حرارة اللون (Temperature)" value={temperature} min={-100} max={100} defaultValue={0} onChange={setTemperature} />
+                      <Adjustment label="منحنى جاما (Gamma)" value={gamma} min={0.2} max={2.5} step={0.05} defaultValue={1.0} onChange={setGamma} />
+
+                      <div className="panel-heading" style={{ marginTop: "10px" }}>
+                        <span>توازن الألوان (Color Balance)</span>
+                      </div>
+                      <Adjustment label="الأحمر (Red Balance)" value={colorBalanceR} min={-100} max={100} defaultValue={0} onChange={setColorBalanceR} />
+                      <Adjustment label="الأخضر (Green Balance)" value={colorBalanceG} min={-100} max={100} defaultValue={0} onChange={setColorBalanceG} />
+                      <Adjustment label="الأزرق (Blue Balance)" value={colorBalanceB} min={-100} max={100} defaultValue={0} onChange={setColorBalanceB} />
+
+                      <div className="panel-heading" style={{ marginTop: "10px" }}>
+                        <span>تأثيرات نغمية أحادية</span>
+                      </div>
+                      <Adjustment label="تدرج رمادي (Grayscale)" value={grayscale} min={0} max={100} defaultValue={0} unit="%" onChange={setGrayscale} />
+                      <Adjustment label="السيبيا (Sepia)" value={sepia} min={0} max={100} defaultValue={0} unit="%" onChange={setSepia} />
+                      <Adjustment label="العكس اللوني (Invert)" value={invert} min={0} max={100} defaultValue={0} unit="%" onChange={setInvert} />
+
+                      <div style={{ padding: "0 17px 12px", marginTop: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                          <label style={{ fontSize: "10px", color: "#8fa9a3", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={thresholdEnabled}
+                              onChange={(e) => setThresholdEnabled(e.target.checked)}
+                              style={{ accentColor: "#2dd4bf" }}
+                            />
+                            <span>العتبة الثنائية (Threshold B&W)</span>
+                          </label>
+                          <output style={{ color: "#c8d9d5", fontSize: "10px" }}>{threshold}</output>
+                        </div>
+                        {thresholdEnabled && (
+                          <Slider value={[threshold]} min={0} max={255} step={1} onValueChange={(values) => setThreshold(values[0])} />
+                        )}
+                      </div>
+
+                      <div className="adjustments-actions">
+                        <button type="button" className="btn-apply-adjustments" onClick={applyAdjustments}>
+                          <Check size={14} /> تطبيق التعديلات (Apply)
+                        </button>
+                        <button type="button" className="btn-reset-all" onClick={resetAdjustments}>
+                          إعادة ضبط الكل
+                        </button>
+                      </div>
+
+                      <div className="transform-actions">
+                        <span>التحويلات الهندسية والأبعاد</span>
+                        <button onClick={() => { setRotation((value) => (value + 90) % 360); setStatus("تم تدوير الصورة 90° مع عقارب الساعة"); }}>تدوير 90° CW</button>
+                        <button onClick={() => { setRotation((value) => (value - 90 + 360) % 360); setStatus("تم تدوير الصورة 90° عكس عقارب الساعة"); }}>تدوير -90° CCW</button>
+                        <button onClick={() => { setRotation((value) => (value + 180) % 360); setStatus("تم تدوير الصورة 180°"); }}>تدوير 180°</button>
+                        <button onClick={() => { setFlipX((value) => !value); setStatus("تم القلب أفقياً"); }}>قلب أفقي ↔</button>
+                        <button onClick={() => { setFlipY((value) => !value); setStatus("تم القلب رأسياً"); }}>قلب رأسي ↕</button>
+                        <button onClick={cropToSquare}>قص مربع 1:1</button>
+                        <button onClick={() => cropToRatio(16, 9)}>قص 16:9</button>
+                        <button onClick={() => cropToRatio(4, 3)}>قص 4:3</button>
+                        <button onClick={() => { setResizeWidth(imageSize.width); setResizeHeight(imageSize.height); setResizeDialogOpen(true); }}>تغيير الحجم...</button>
+                      </div>
+
+                      <div className="selection-actions">
+                        <span>أدوات التحديد والقناع</span>
+                        <div className="selection-modes">
+                          <button className={selectionShape === "rectangle" ? "active" : ""} onClick={() => setSelectionShape("rectangle")}>مستطيل</button>
+                          <button className={selectionShape === "ellipse" ? "active" : ""} onClick={() => setSelectionShape("ellipse")}>بيضاوي</button>
+                          <button className={selectionShape === "free" ? "active" : ""} onClick={() => setSelectionShape("free")}>حر</button>
+                          <button className={selectionMode === "replace" ? "active" : ""} onClick={() => setSelectionMode("replace")}>استبدال</button>
+                          <button className={selectionMode === "add" ? "active" : ""} onClick={() => setSelectionMode("add")}>إضافة</button>
+                          <button className={selectionMode === "subtract" ? "active" : ""} onClick={() => setSelectionMode("subtract")}>طرح</button>
+                          <button onClick={selectAll} title="تحديد كامل الصورة (Ctrl+A)">الكل</button>
+                          <button onClick={deselect} title="إلغاء التحديد (Ctrl+D)">إلغاء</button>
+                          <button onClick={invertSelection} title="عكس نطاق التحديد (Ctrl+Shift+I)">عكس</button>
+                          <button onClick={featherActiveSelection} title="تنعيم حواف التحديد (Feather)">تنعيم</button>
+                          <button onClick={createMaskFromSelection} title="إنشاء قناع غير تدميري">قناع</button>
+                        </div>
+                      </div>
+
+                      <div className="properties-divider" />
+                      <div className="property-row">
+                        <span>وضع الدمج</span>
+                        <button className="select-control" onClick={cycleBlendMode}>{blendMode} <ChevronDown size={13} /></button>
+                      </div>
+                      <div className="property-row">
+                        <span>نمط الألوان</span>
+                        <span className="value-muted">sRGB IEC61966-2.1</span>
+                      </div>
+                      <div className="property-row">
+                        <span>اللون المحدد</span>
+                        <span className="value-muted">{foregroundColor.toUpperCase()} · {sampledRgb}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ─── القسم 3: الفلاتر الحية والمؤثرات ─── */}
+                  {propertiesSection === "filters" && (
+                    <>
+                      <div className="panel-heading">
+                        <span>معرض المرشحات والمؤثرات (Filters)</span>
+                        {filterMode !== "none" && (
+                          <button onClick={() => { setFilterMode("none"); setStatus("تمت إزالة المرشح"); }} title="إلغاء المرشح">
+                            <RotateCcw size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Filter Categories Filter */}
+                      <div className="filter-categories" style={{ padding: "0 17px" }}>
+                        {(["الكل", "تمويه", "حدة", "حواف", "ضوضاء", "هندسية", "لونية", "فنية"] as const).map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            className={`filter-category-btn ${filterCategoryFilter === cat ? "active" : ""}`}
+                            onClick={() => setFilterCategoryFilter(cat)}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Active Filter Parameter Tuning Box */}
+                      {filterMode !== "none" && (() => {
+                        const activeDef = FILTER_CATALOG.find((f) => f.id === filterMode);
+                        if (!activeDef) return null;
+                        return (
+                          <div className="active-filter-card" style={{ margin: "8px 17px" }}>
+                            <div className="active-filter-header">
+                              <span className="active-filter-title">
+                                <Sparkles size={13} /> {activeDef.nameArabic}
+                              </span>
+                              <span className="filter-chip-badge">{activeDef.category}</span>
+                            </div>
+                            <div className="active-filter-desc">{activeDef.description}</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#8fa9a3", marginBottom: "4px" }}>
+                              <span>{activeDef.intensityLabel || "شدة التأثير"}</span>
+                              <span style={{ color: "#2dd4bf", fontWeight: 700 }}>{filterIntensity}%</span>
+                            </div>
+                            <Slider
+                              value={[filterIntensity]}
+                              min={activeDef.minIntensity ?? 10}
+                              max={activeDef.maxIntensity ?? 100}
+                              step={1}
+                              onValueChange={(val) => setFilterIntensity(val[0])}
+                            />
+                            <div className="active-filter-actions">
+                              <button type="button" className="btn-bake-filter" onClick={applyFilterPermanently} title="تطبيق التأثير نهائياً على الصورة الأصلية">
+                                <Check size={12} /> اعتماد التأثير (Bake)
+                              </button>
+                              <button type="button" className="btn-reset-filter" onClick={() => setFilterMode("none")} title="إلغاء التأثير والعودة للأصل">
+                                إلغاء
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Section 6 & Canva: Live Visual Photo Filter Previews */}
+                      <div style={{ padding: "0 17px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#a855f7", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Sparkles size={13} /> {currentLang === "ar" ? "معاينة حية على صورتك" : "Live Photo Previews"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsFiltersStudioOpen(true)}
+                          className="canva-white-pill-btn"
+                          style={{ fontSize: "10.5px", padding: "4px 10px", gap: "4px" }}
+                        >
+                          <Sparkles size={11} /> {currentLang === "ar" ? "استوديو الفلاتر الموسع" : "Expand Studio"}
+                        </button>
+                      </div>
+
+                      <div className="filter-visual-grid" style={{ margin: "4px 17px 14px" }}>
+                        {FILTER_CATALOG.filter((f) => filterCategoryFilter === "الكل" || f.category === filterCategoryFilter).map((f) => {
+                          const isActive = filterMode === f.id;
+                          const thumb = filterThumbnails[f.id];
+                          return (
+                            <div
+                              key={f.id}
+                              className={`filter-visual-card ${isActive ? "active" : ""}`}
+                              onClick={() => {
+                                setFilterMode(f.id);
+                                if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
+                                setStatus(`تم تطبيق مرشح: ${f.nameArabic}`);
+                              }}
+                              title={f.description}
+                            >
+                              <div className="filter-visual-thumb-wrap">
+                                {thumb ? (
+                                  <img src={thumb} alt={f.nameArabic} className="filter-visual-thumb" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-950">
+                                    {f.nameArabic}
+                                  </div>
+                                )}
+                                {isActive && (
+                                  <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full p-0.5 shadow-md">
+                                    <Check size={10} strokeWidth={3} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="filter-visual-meta">
+                                <span className="filter-visual-name">{f.nameArabic}</span>
+                                <span className="filter-visual-badge">{f.category}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Quick Convolution Matrix Filters */}
+                      <div className="panel-heading" style={{ marginTop: "14px" }}>
+                        <span>مصفوفات التلافيف السريعة</span>
+                      </div>
+                      <div className="adjustment-grid" style={{ margin: "0 17px 14px" }}>
+                        <button onClick={() => { setFilterMode("blur"); setStatus("تم تطبيق تمويه ضبابي Gaussian Blur"); }}><WandSparkles size={15} /> تمويه Blur</button>
+                        <button onClick={() => { setFilterMode("sharpen"); setStatus("تم تطبيق زيادة الحدة Sharpen 3x3"); }}><SlidersHorizontal size={15} /> حدة Sharpen</button>
+                        <button onClick={() => { setFilterMode("edges"); setStatus("تم تطبيق كشف الحواف Laplacian Edge Detection"); }}><Square size={15} /> حواف Edges</button>
+                        <button onClick={() => { setFilterMode("emboss"); setStatus("تم تطبيق فلتر النقش البارز Emboss"); }}><Sparkles size={15} /> نقش Emboss</button>
+                        <button onClick={() => { setFilterMode("pixelate"); setStatus("تم تطبيق فلتر الفسيفساء والبكسلة Pixelate"); }}><Grid size={15} /> فسيفساء Pixel</button>
+                        <button onClick={() => { setFilterMode("none"); setStatus("تمت إزالة الفلاتر والعودة للأصل"); }}><RotateCcw size={15} /> أصل بدون فلتر</button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ─── القسم 4: ستوديو التنقيح والذكاء الاصطناعي ─── */}
+                  {propertiesSection === "ai" && (
+                    <>
+                      <div className="panel-heading">
+                        <span>ستوديو التنقيح وإزالة العيوب (Retouching Studio)</span>
+                        <button
+                          onClick={() => {
+                            setCloneSource(null);
+                            setRetouchRadius(24);
+                            setRetouchOpacity(100);
+                            setRetouchHardness(80);
+                            setSkinSmoothIntensity(60);
+                            setBgRemoveTolerance(30);
+                            setStatus("تمت إعادة ضبط إعدادات التنقيح الافتراضية");
+                          }}
+                          title="إعادة ضبط إعدادات التنقيح"
+                        >
+                          <RotateCcw size={13} />
+                        </button>
+                      </div>
+
+                      <div style={{ padding: "0 17px", marginBottom: "10px" }}>
+                        <div style={{ fontSize: "11px", color: "var(--signal-teal, #2dd4bf)", fontWeight: 600, marginBottom: "6px" }}>
+                          أدوات المعالجة والتنقيح الموضعية
+                        </div>
+                        <div className="retouch-actions-grid">
+                          <button
+                            type="button"
+                            className={`retouch-card-btn ${activeTool === "clone" ? "active" : ""}`}
+                            onClick={() => {
+                              activateTool("clone");
+                              setRetouchMode("clone");
+                            }}
+                            title="ختم الاستنساخ: اضغط Alt+النقر لتحديد المصدر ثم اسحب للنسخ"
+                          >
+                            <Stamp size={15} />
+                            <span>ختم الاستنساخ (S)</span>
+                            <span className={`retouch-badge ${cloneSource ? "highlight" : ""}`}>
+                              {cloneSource ? `المصدر: ${Math.round(cloneSource.x)},${Math.round(cloneSource.y)}` : "Alt+انقر للمصدر"}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "heal" ? "active" : ""}`}
+                            onClick={() => {
+                              activateTool("heal");
+                              setRetouchMode("heal");
+                              setStatus("فرشاة المعالجة نشطة — اضغط Alt+النقر لتحديد عينة النسيج، ثم انقر لمزجها مع الإضاءة");
+                            }}
+                            title="فرشاة المعالجة: دمج النسيج مع الإضاءة المحلية"
+                          >
+                            <Sparkles size={15} />
+                            <span>فرشاة المعالجة (J)</span>
+                            <span className="retouch-badge">مزج النسيج</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "spot" ? "active" : ""}`}
+                            onClick={() => {
+                              activateTool("heal");
+                              setRetouchMode("spot");
+                              setStatus("أداة معالجة البقع الفورية جاهزة — انقر مباشرة على أي بقعة أو عيب لإزالته");
+                            }}
+                            title="إزالة البقع الفورية: نقرة واحدة على البقعة لإزالتها"
+                          >
+                            <CircleDot size={15} />
+                            <span>إزالة البقع (Spot)</span>
+                            <span className="retouch-badge">نقرة واحدة</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`retouch-card-btn ${activeTool === "heal" && retouchMode === "redeye" ? "active" : ""}`}
+                            onClick={() => {
+                              activateTool("heal");
+                              setRetouchMode("redeye");
+                              setStatus("أداة إزالة العين الحمراء نشطة — انقر على بؤبؤ العين لقمع الاحمرار فورياً");
+                            }}
+                            title="إزالة العين الحمراء: نقرة على البؤبؤ"
+                          >
+                            <Crosshair size={15} />
+                            <span>العين الحمراء</span>
+                            <span className="retouch-badge">تصحيح البؤبؤ</span>
+                          </button>
+                        </div>
+
+                        <Adjustment label="نصف قطر الأداة (Radius)" value={retouchRadius} min={4} max={80} defaultValue={24} unit="px" onChange={setRetouchRadius} />
+                        <Adjustment label="عتامة التنقيح (Opacity)" value={retouchOpacity} min={10} max={100} defaultValue={100} unit="%" onChange={setRetouchOpacity} />
+                        <Adjustment label="صلابة حواف التنقيح (Hardness)" value={retouchHardness} min={0} max={100} defaultValue={80} unit="%" onChange={setRetouchHardness} />
+
+                        <div className="sb-section-label" style={{ marginTop: "10px", marginBottom: "6px" }}>
+                          معالجات ذكية متقدمة (Smart Retouch Actions)
+                        </div>
+
+                        {/* Skin Smoothing Card */}
+                        <div className="sb-card" style={{ marginBottom: "8px" }}>
+                          <Adjustment label="شدة تنعيم البشرة (Skin Smooth)" value={skinSmoothIntensity} min={10} max={100} defaultValue={60} unit="%" onChange={setSkinSmoothIntensity} />
+                          <button
+                            type="button"
+                            className="retouch-action-submit-btn"
+                            onClick={handleApplySkinSmoothing}
+                            title="تنعيم مسام البشرة مع الحفاظ التام على ملامح العيون والشفاه والشعر"
+                          >
+                            <Sparkles size={13} /> تطبيق تنعيم البشرة الذكي
+                          </button>
+                        </div>
+
+                        {/* Content-Aware Inpainting Fill Card */}
+                        <div className="sb-card" style={{ marginBottom: "8px" }}>
+                          <div className="sb-hint" style={{ marginBottom: "4px" }}>
+                            {selection ? `التحديد نشط (${Math.round(selection.width)}×{Math.round(selection.height)}px)` : "حدد عنصراً بأداة التحديد (V) أولاً للملء"}
                           </div>
                           <button
                             type="button"
                             className="retouch-action-submit-btn"
-                            onClick={handleExportPureSubject}
-                            style={{
-                              width: "100%",
-                              justifyContent: "center",
-                              background: "linear-gradient(135deg, rgba(45,212,191,0.25), rgba(20,184,166,0.2))",
-                              border: "1px solid rgba(45,212,191,0.6)",
-                              color: "#ccfbf1",
-                              fontWeight: 700,
-                              fontSize: "10px",
-                              padding: "7px 10px",
-                              gap: "5px"
-                            }}
-                            title="تصدير الشخص المعزول وحده بصيغة PNG شفافة عالية الدقة بدون أي خلفية أو مساحة عمل زائدة"
+                            onClick={handleApplyInpaint}
+                            title="إزالة العنصر أو العيب من منطقة التحديد وملؤه بالنسيج المحيط"
                           >
-                            <Download size={13} /> 📥 تصدير المحتوى الصافي فقط (PNG شفاف)
+                            <WandSparkles size={13} /> ملء وإزالة العنصر المحدد (Inpaint)
                           </button>
                         </div>
-                      )}
 
-                      {/* ─── 1. الميزة الأولى المطلوبة: زر عزل المحتوى الصافي فقط بدون أي خلفية أو طبقات ─── */}
-                      <div style={{ marginBottom: "8px", background: "rgba(234,179,8,0.07)", border: "1px solid rgba(245,158,11,0.45)", borderRadius: "8px", padding: "8px 10px" }}>
-                        <div style={{ fontSize: "10px", color: "#fef08a", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px" }}>
-                          <span>🎯</span> <span>عزل المحتوى الصافي (بدون خلفية أو طبقات):</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="retouch-action-submit-btn"
-                          onClick={handlePureContentCutout}
-                          disabled={aiProcessing}
-                          style={{
-                            width: "100%",
-                            justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(234,179,8,0.3), rgba(245,158,11,0.25))",
-                            border: "1px solid rgba(245,158,11,0.7)",
-                            fontWeight: 700,
-                            color: "#fef08a",
-                            padding: "9px 12px",
-                            fontSize: "11px",
-                            boxShadow: "0 2px 10px rgba(234,179,8,0.18)",
-                            opacity: aiProcessing ? 0.6 : 1,
-                            cursor: aiProcessing ? "wait" : "pointer",
-                            gap: "6px"
-                          }}
-                          title="عزل المحتوى الصافي فقط وقص أبعاد الصورة بدقة متناهية على حدوده بالضبط بدون أي خلفية أو أي طبقات إضافية"
-                        >
-                          <Crop size={15} /> 🎯 عزل المحتوى الصافي فقط (بدون أي خلفية)
-                        </button>
-                        <div style={{ fontSize: "8.5px", color: "#eab308", marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
-                          ✨ يستخرج العنصر ويقص الصورة على حدوده تماماً بدون أي طبقة شفافة أو مساحة فارغة
-                        </div>
-                      </div>
+                        {/* Professional Subject Extraction & Background Effects Panel */}
+                        <div className="sb-card-teal" style={{ marginBottom: "12px" }}>
+                          <div className="sb-section-label" style={{ marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                              <WandSparkles size={13} /> عزل الأجسام وتأثيرات الخلفية (AI Cutout & Bokeh)
+                            </span>
+                            <span style={{ fontSize: "8px", background: "rgba(45,212,191,0.18)", border: "1px solid rgba(45,212,191,0.4)", borderRadius: "4px", color: "var(--sig-teal)", padding: "1px 6px", fontWeight: 700 }}>
+                              ⚡ NEURAL IS-NET
+                            </span>
+                          </div>
 
-                      {/* ─── 2. الميزة الثانية المطلوبة: زر رفع صورة خلفية مخصصة للصورة المعزولة ─── */}
-                      <div style={{ marginBottom: "10px", background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.45)", borderRadius: "8px", padding: "8px 10px" }}>
-                        <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px" }}>
-                          <span>🖼️</span> <span>تركيب خلفية مخصصة للصورة المعزولة:</span>
-                        </div>
-                        <input
-                          ref={customBgInputRef}
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          onChange={handleUploadCustomBackground}
-                        />
-                        <button
-                          type="button"
-                          className="retouch-action-submit-btn"
-                          onClick={() => customBgInputRef.current?.click()}
-                          disabled={aiProcessing}
-                          style={{
-                            width: "100%",
-                            justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.25))",
-                            border: "1px solid rgba(59,130,246,0.7)",
-                            color: "#bfdbfe",
-                            fontWeight: 700,
-                            fontSize: "11px",
-                            padding: "9px 12px",
-                            gap: "6px",
-                            boxShadow: "0 2px 10px rgba(59,130,246,0.18)",
-                            opacity: aiProcessing ? 0.6 : 1,
-                            cursor: aiProcessing ? "wait" : "pointer"
-                          }}
-                          title="رفع أي صورة من جهازك لوضعها كخلفية جديدة بدقة متناهية خلف الصورة التي تم عزل خلفيتها"
-                        >
-                          <Upload size={15} /> 🖼️ رفع صورة خلفية مخصصة من جهازك...
-                        </button>
-                        <div style={{ fontSize: "8.5px", color: "#60a5fa", marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
-                          📁 اختر أي صورة من جهازك لدمجها تلقائياً كخلفية جديدة عالية الدقة خلف العنصر المعزول
-                        </div>
-                      </div>
+                          {/* Engine Status Banner */}
+                          <div className="sb-ai-banner" style={{ marginBottom: "8px" }}>
+                            <span style={{ fontSize: "12px" }}>🤖</span>
+                            <span><strong>محرك الذكاء الاصطناعي العصبي مفعّل:</strong> عزل دقيق لأدق خصلات الشعر والملابس والبورتريه بدون أي تشويه.</span>
+                          </div>
+
+                          {/* Active AI Progress Bar */}
+                          {aiProcessing && (
+                            <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.1)", border: "1px solid rgba(45,212,191,0.35)", borderRadius: "6px", padding: "8px 10px" }}>
+                              <div style={{ fontSize: "10px", color: "var(--sig-teal)", marginBottom: "4px", display: "flex", justifyContent: "space-between" }}>
+                                <span>⚙️ {aiTask || "جاري المعالجة بالذكاء الاصطناعي..."}</span>
+                                <span>{aiProgress}%</span>
+                              </div>
+                              <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "3px", height: "5px", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${aiProgress}%`, background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #3b82f6)", borderRadius: "3px", transition: "width 0.25s ease" }} />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sliders */}
+                          <Adjustment label="قوة تمويه الخلفية (Bokeh Radius)" value={bgBlurRadius} min={5} max={50} defaultValue={20} onChange={setBgBlurRadius} />
+                          <Adjustment label="تنعيم وصقل الحواف (Edge Feather)" value={bgFeather} min={0} max={8} defaultValue={3} onChange={setBgFeather} />
+                          <Adjustment label="حساسية العزل الإضافية (Tolerance)" value={bgRemoveTolerance} min={10} max={70} defaultValue={30} onChange={setBgRemoveTolerance} />
+
+                          {/* Smart Hint */}
+                          <div className="sb-hint" style={{ margin: "6px 0 10px 0", background: "var(--card-accent-bg)", padding: "5px 8px", borderRadius: "5px", border: "1px dashed var(--sig-teal-border)" }}>
+                            💡 <strong>طريقة العمل:</strong> انقر مباشرة على أي زر أدناه لمعالجة الصورة كاملة بالذكاء الاصطناعي، أو حدد جزءاً بأداة التحريك (V) لعزل منطقة معينة فقط.
+                          </div>
+
+                          {/* بطاقة التحكم في المحتوى المعزول الحر (Floating Subject Controller) */}
+                          {floatingSubject && (
+                            <div className="sb-card-teal" style={{ marginBottom: "10px", padding: "8px 10px" }}>
+                              <div className="sb-section-label" style={{ marginBottom: "5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                                  <Move size={13} /> <span>المحتوى المعزول (حر ومستقل):</span>
+                                </span>
+                                <span style={{ fontSize: "8.5px", background: "var(--sig-teal-dim)", padding: "2px 6px", borderRadius: "3px", color: "var(--sig-teal)" }}>
+                                  {floatingSubject.width}×{floatingSubject.height}px ({Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%)
+                                </span>
+                              </div>
+
+                              {/* قسم تكبير وتصغير المحتوى */}
+                              <div className="sb-card" style={{ marginBottom: "8px", padding: "6px 8px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                  <span className="sb-prop-label" style={{ fontSize: "9.5px" }}>🔍 تكبير وتصغير الحجم:</span>
+                                  <span className="sb-accent-value" style={{ fontSize: "9.5px" }}>
+                                    {Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}%
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={10}
+                                  max={300}
+                                  step={5}
+                                  value={Math.round((floatingSubject.width / (floatingSubject.naturalWidth || floatingSubject.width || 1)) * 100)}
+                                  onChange={(e) => handleScaleSubject(Number(e.target.value))}
+                                  style={{ width: "100%", accentColor: "var(--sig-teal)", cursor: "pointer", height: "4px", margin: "3px 0 6px 0" }}
+                                />
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "3px" }}>
+                                  <button
+                                    type="button"
+                                    className="retouch-action-submit-btn"
+                                    onClick={() => handleScaleSubjectDelta(-10)}
+                                    style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                    title="تصغير المحتوى بنسبة 10%"
+                                  >
+                                    ➖ -10%
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="retouch-action-submit-btn"
+                                    onClick={() => handleScaleSubjectDelta(10)}
+                                    style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                    title="تكبير المحتوى بنسبة 10%"
+                                  >
+                                    ➕ +10%
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="retouch-action-submit-btn"
+                                    onClick={() => handleScaleSubject(100)}
+                                    style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                    title="إعادة الحجم الأصلي 100%"
+                                  >
+                                    🔄 100%
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="retouch-action-submit-btn"
+                                    onClick={handleFitSubjectToCanvas}
+                                    style={{ justifyContent: "center", fontSize: "9px", padding: "4px 2px" }}
+                                    title="ملاءمة الحجم داخل الكانفاس"
+                                  >
+                                    📐 ملء
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="sb-prop-label" style={{ fontSize: "8.5px", marginBottom: "5px", lineHeight: "1.3" }}>
+                                🎯 <strong>التحريك والمحاذاة:</strong> اسحب الشخص مباشرة بالماوس، أو اضبط المحاذاة:
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "6px" }}>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("center")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="توسيط المحتوى في منتصف الكانفاس">
+                                  🎯 توسيط
+                                </button>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("right")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليمين">
+                                  ➡️ يمين
+                                </button>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("left")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى لليسار">
+                                  ⬅️ يسار
+                                </button>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("top")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأعلى">
+                                  ⬆️ أعلى
+                                </button>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("bottom")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="محاذاة المحتوى للأسفل">
+                                  ⬇️ أسفل
+                                </button>
+                                <button type="button" className="retouch-action-submit-btn" onClick={() => handleAlignSubject("reset")} style={{ justifyContent: "center", fontSize: "9px", padding: "5px 2px" }} title="إعادة ضبط موضع المحتوى">
+                                  🔄 ضبط
+                                </button>
+                              </div>
+                              <div style={{ marginBottom: "6px" }}>
+                                <button
+                                  type="button"
+                                  className="sb-crop-canvas-btn"
+                                  onClick={handleFitCanvasToSubject}
+                                  title="اقتصاص مساحة العمل بالكامل لتطابق أبعاد المحتوى الصافي تماماً وحذف أي مساحة فارغة خارجية"
+                                >
+                                  ✂️ اقتصاص مساحة العمل للمحتوى الصافي
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                className="sb-primary-btn"
+                                onClick={handleExportPureSubject}
+                                style={{ width: "100%", justifyContent: "center" }}
+                                title="تصدير الشخص المعزول وحده بصيغة PNG شفافة عالية الدقة بدون أي خلفية أو مساحة عمل زائدة"
+                              >
+                                <Download size={13} /> 📥 تصدير المحتوى الصافي فقط (PNG شفاف)
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 1. عزل المحتوى الصافي فقط بدون أي خلفية أو طبقات */}
+                          <div className="sb-card-amber" style={{ marginBottom: "8px", padding: "8px 10px" }}>
+                            <div className="sb-accent-value" style={{ fontSize: "10px", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px", color: "var(--sig-amber)" }}>
+                              <span>🎯</span> <span>عزل المحتوى الصافي (بدون خلفية أو طبقات):</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="sb-ai-btn"
+                              onClick={handlePureContentCutout}
+                              disabled={aiProcessing}
+                              style={{
+                                width: "100%",
+                                justifyContent: "center",
+                                padding: "9px 12px",
+                                opacity: aiProcessing ? 0.6 : 1,
+                                cursor: aiProcessing ? "wait" : "pointer"
+                              }}
+                              title="عزل المحتوى الصافي فوراً بدون أي خلفيات أو طبقات إضافية"
+                            >
+                              <WandSparkles size={15} /> 🎯 عزل المحتوى الصافي فوراً
+                            </button>
+                            <div className="sb-hint" style={{ marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
+                              ✨ يعزل الشخص/العنصر فوراً ويفرّغ الخلفية تماماً
+                            </div>
+                          </div>
+
+                          {/* 2. الميزة الثانية المطلوبة: زر رفع صورة خلفية مخصصة للصورة المعزولة */}
+                          <div className="sb-card-blue" style={{ marginBottom: "10px", padding: "8px 10px" }}>
+                            <div className="sb-accent-value" style={{ fontSize: "10px", fontWeight: 700, marginBottom: "5px", display: "flex", alignItems: "center", gap: "5px", color: "var(--sig-blue)" }}>
+                              <span>🖼️</span> <span>تركيب خلفية مخصصة للصورة المعزولة:</span>
+                            </div>
+                            <input
+                              ref={customBgInputRef}
+                              type="file"
+                              accept="image/*"
+                              style={{ display: "none" }}
+                              onChange={handleUploadCustomBackground}
+                            />
+                            <button
+                              type="button"
+                              className="sb-blue-btn"
+                              onClick={() => customBgInputRef.current?.click()}
+                              disabled={aiProcessing}
+                              style={{
+                                width: "100%",
+                                justifyContent: "center",
+                                padding: "9px 12px",
+                                opacity: aiProcessing ? 0.6 : 1,
+                                cursor: aiProcessing ? "wait" : "pointer"
+                              }}
+                              title="رفع أي صورة من جهازك لوضعها كخلفية جديدة بدقة متناهية خلف الصورة التي تم عزل خلفيتها"
+                            >
+                              <Upload size={15} /> 🖼️ رفع صورة خلفية مخصصة من جهازك...
+                            </button>
+                            <div className="sb-hint" style={{ marginTop: "5px", textAlign: "center", lineHeight: "1.3" }}>
+                              📁 اختر أي صورة من جهازك لدمجها تلقائياً كخلفية جديدة عالية الدقة خلف العنصر المعزول
+                            </div>
+                          </div>
 
                       {/* 3. تحرير الجسم إلى طبقة جديدة */}
                       <div style={{ marginBottom: "6px" }}>
                         <button
                           type="button"
-                          className="retouch-action-submit-btn"
+                          className="sb-primary-btn"
                           onClick={handleExtractSubjectToNewLayer}
                           disabled={aiProcessing}
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(45,212,191,0.2), rgba(6,182,212,0.15))",
-                            border: "1px solid rgba(45,212,191,0.4)",
-                            fontWeight: 600,
-                            color: "#5eead4",
-                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
@@ -6573,16 +8199,12 @@ export default function Home() {
                       <div style={{ marginBottom: "6px" }}>
                         <button
                           type="button"
-                          className="retouch-action-submit-btn"
+                          className="sb-primary-btn"
                           onClick={handleApplyBackgroundRemoval}
                           disabled={aiProcessing}
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "rgba(45,212,191,0.1)",
-                            border: "1px solid rgba(45,212,191,0.3)",
-                            fontWeight: 600,
-                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
@@ -6596,17 +8218,12 @@ export default function Home() {
                       <div style={{ marginBottom: "8px" }}>
                         <button
                           type="button"
-                          className="retouch-action-submit-btn"
+                          className="sb-indigo-btn"
                           onClick={handleBlurBackground}
                           disabled={aiProcessing}
                           style={{
                             width: "100%",
                             justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15))",
-                            border: "1px solid rgba(99,102,241,0.45)",
-                            color: "#c7d2fe",
-                            fontWeight: 600,
-                            padding: "7px 10px",
                             opacity: aiProcessing ? 0.6 : 1,
                             cursor: aiProcessing ? "wait" : "pointer"
                           }}
@@ -6618,26 +8235,26 @@ export default function Home() {
 
                       {/* 6. استبدال الخلفية بألوان وتدرجات استوديو */}
                       <div>
-                        <div style={{ fontSize: "10px", color: "#a8c4be", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم بألوان وتدرجات جاهزة:</div>
+                        <div className="sb-prop-label" style={{ fontSize: "10px", fontWeight: 600, marginBottom: "5px" }}>🎨 استبدال خلفية الجسم بألوان وتدرجات جاهزة:</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "4px" }}>
-                          <button type="button" className="retouch-action-submit-btn"
+                          <button type="button" className="sb-ghost-btn"
                             onClick={() => handleHideBackground("transparent")}
                             disabled={aiProcessing}
-                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.15)" }}
+                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px" }}
                             title="خلفية شفافة">
                             ◻️ شفاف
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("black")}
                             disabled={aiProcessing}
-                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.15)" }}
+                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "#0f172a", border: "1px solid rgba(255,255,255,0.15)", color: "#ffffff" }}
                             title="أسود استوديو فخم">
                             ⬛ أسود
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("white")}
                             disabled={aiProcessing}
-                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}
+                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "#f8fafc", border: "1px solid #cbd5e1", color: "#0f172a" }}
                             title="أبيض نقي تجاري">
                             ⬜ أبيض
                           </button>
@@ -6646,14 +8263,14 @@ export default function Home() {
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("studio-dark")}
                             disabled={aiProcessing}
-                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1px solid rgba(148,163,184,0.3)" }}
+                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1px solid rgba(148,163,184,0.3)", color: "#e2e8f0" }}
                             title="تدرج استوديو سينمائي">
                             🎬 تدرج سينمائي
                           </button>
                           <button type="button" className="retouch-action-submit-btn"
                             onClick={() => handleHideBackground("chroma")}
                             disabled={aiProcessing}
-                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(0,177,64,0.2)", border: "1px solid rgba(0,177,64,0.4)", color: "#86efac" }}
+                            style={{ justifyContent: "center", fontSize: "9px", padding: "5px", background: "rgba(0,177,64,0.15)", border: "1px solid rgba(0,177,64,0.4)", color: "#16a34a" }}
                             title="خلفية خضراء كروما">
                             🟩 كروما خضراء
                           </button>
@@ -6662,18 +8279,18 @@ export default function Home() {
                     </div>
 
                     {/* ─── Phase 13: AI & Advanced Features Panel ─── */}
-                    <div style={{ marginTop: "14px", borderTop: "1px solid rgba(45,212,191,0.15)", paddingTop: "12px" }}>
+                    <div style={{ marginTop: "14px", borderTop: "1px solid var(--sig-teal-border)", paddingTop: "12px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#2dd4bf", display: "flex", alignItems: "center", gap: "5px" }}>
+                        <span className="sb-section-label" style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                           <WandSparkles size={13} /> وظائف الذكاء الاصطناعي المحلية (Phase 13)
                         </span>
-                        <span style={{ fontSize: "8px", background: "rgba(45,212,191,0.12)", border: "1px solid rgba(45,212,191,0.3)", borderRadius: "10px", color: "#2dd4bf", padding: "1px 6px" }}>LOCAL AI</span>
+                        <span style={{ fontSize: "8px", background: "var(--sig-teal-dim)", border: "1px solid var(--sig-teal-border)", borderRadius: "10px", color: "var(--sig-teal)", padding: "1px 6px" }}>LOCAL AI</span>
                       </div>
 
                       {/* AI Processing Progress Bar */}
                       {aiProcessing && (
-                        <div style={{ marginBottom: "10px", background: "rgba(45,212,191,0.08)", border: "1px solid rgba(45,212,191,0.2)", borderRadius: "6px", padding: "8px 10px" }}>
-                          <div style={{ fontSize: "10px", color: "#2dd4bf", marginBottom: "4px" }}>⚙️ {aiTask}...</div>
+                        <div style={{ marginBottom: "10px", background: "var(--sig-teal-dim)", border: "1px solid var(--sig-teal-border)", borderRadius: "6px", padding: "8px 10px" }}>
+                          <div style={{ fontSize: "10px", color: "var(--sig-teal)", marginBottom: "4px" }}>⚙️ {aiTask}...</div>
                           <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: "3px", height: "4px", overflow: "hidden" }}>
                             <div style={{ height: "100%", width: `${aiProgress}%`, background: "linear-gradient(90deg, #2dd4bf, #06b6d4)", borderRadius: "3px", transition: "width 0.3s ease" }} />
                           </div>
@@ -6681,8 +8298,8 @@ export default function Home() {
                       )}
 
                       {/* 1. Smart Upscale */}
-                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                        <div style={{ fontSize: "10px", fontWeight: 600, color: "#c8d9d5", marginBottom: "5px" }}>🔍 تحسين الدقة (Upscale)</div>
+                      <div className="sb-card" style={{ padding: "8px", marginBottom: "8px" }}>
+                        <div className="sb-prop-value" style={{ fontSize: "10px", fontWeight: 600, marginBottom: "5px" }}>🔍 تحسين الدقة (Upscale)</div>
                         <div style={{ display: "flex", gap: "4px", marginBottom: "6px" }}>
                           {([2, 3, 4] as const).map(f => (
                             <button key={f} type="button"
@@ -6690,7 +8307,7 @@ export default function Home() {
                               onClick={() => setUpscaleFactor(f)}>{f}×</button>
                           ))}
                         </div>
-                        <div style={{ fontSize: "9px", color: "#6a8c85", marginBottom: "5px" }}>
+                        <div className="sb-hint" style={{ marginBottom: "5px" }}>
                           نتيجة: {imageSize.width * upscaleFactor}×{imageSize.height * upscaleFactor}px — مع شحذ Lanczos تقديري
                         </div>
                         <button type="button" className="retouch-action-submit-btn"
@@ -6701,16 +8318,17 @@ export default function Home() {
                       </div>
 
                       {/* 2. Smart AutoCrop */}
-                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                        <div style={{ fontSize: "10px", fontWeight: 600, color: "#c8d9d5", marginBottom: "5px" }}>✂️ القص الذكي (Smart AutoCrop)</div>
+                      <div className="sb-card" style={{ padding: "8px", marginBottom: "8px" }}>
+                        <div className="sb-prop-value" style={{ fontSize: "10px", fontWeight: 600, marginBottom: "5px" }}>✂️ القص الذكي (Smart AutoCrop)</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "5px" }}>
-                          <span style={{ fontSize: "9px", color: "#6a8c85" }}>هامش إضافي:</span>
+                          <span className="sb-hint">هامش إضافي:</span>
                           <input type="number" min={0} max={100} value={autocropPadding}
                             onChange={e => setAutocropPadding(Number(e.target.value))}
-                            style={{ width: "48px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "2px 4px", fontSize: "10px" }} />
-                          <span style={{ fontSize: "9px", color: "#6a8c85" }}>px</span>
+                            className="sb-inline-input"
+                            style={{ width: "48px", padding: "2px 4px", fontSize: "10px" }} />
+                          <span className="sb-hint">px</span>
                         </div>
-                        <div style={{ fontSize: "9px", color: "#6a8c85", marginBottom: "5px" }}>يكتشف حدود المحتوى ويحذف الهوامش البيضاء/الشفافة</div>
+                        <div className="sb-hint" style={{ marginBottom: "5px" }}>يكتشف حدود المحتوى ويحذف الهوامش البيضاء/الشفافة</div>
                         <button type="button" className="retouch-action-submit-btn"
                           onClick={handleSmartAutoCrop} disabled={aiProcessing}
                           title="اكتشاف المحتوى وقص الهوامش تلقائياً">
@@ -6719,8 +8337,8 @@ export default function Home() {
                       </div>
 
                       {/* 3. Outpainting */}
-                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                        <div style={{ fontSize: "10px", fontWeight: 600, color: "#c8d9d5", marginBottom: "5px" }}>🖼️ توسيع الصورة (Outpainting)</div>
+                      <div className="sb-card" style={{ padding: "8px", marginBottom: "8px" }}>
+                        <div className="sb-prop-value" style={{ fontSize: "10px", fontWeight: 600, marginBottom: "5px" }}>🖼️ توسيع الصورة (Outpainting)</div>
                         <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "5px" }}>
                           {(["all", "right", "left", "bottom", "top"] as const).map(d => (
                             <button key={d} type="button"
@@ -6740,8 +8358,8 @@ export default function Home() {
                       </div>
 
                       {/* 4. Art Style Presets */}
-                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px", marginBottom: "8px" }}>
-                        <div style={{ fontSize: "10px", fontWeight: 600, color: "#c8d9d5", marginBottom: "5px" }}>🎭 تحويل إلى نمط فني (Art Style)</div>
+                      <div className="sb-card" style={{ padding: "8px", marginBottom: "8px" }}>
+                        <div className="sb-prop-value" style={{ fontSize: "10px", fontWeight: 600, marginBottom: "5px" }}>🎭 تحويل إلى نمط فني (Art Style)</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", marginBottom: "6px" }}>
                           {Object.entries(ART_STYLES).map(([key, s]) => (
                             <button key={key} type="button"
@@ -6760,375 +8378,20 @@ export default function Home() {
                       </div>
 
                       {/* AI Disclaimer */}
-                      <div style={{ fontSize: "9px", color: "#4a6860", padding: "6px 8px", background: "rgba(255,255,255,0.02)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.04)", lineHeight: 1.5 }}>
+                      <div className="sb-hint" style={{ fontSize: "9px", padding: "6px 8px", background: "var(--card-subtle)", borderRadius: "4px", border: "1px solid var(--card-subtle-border)", lineHeight: 1.5 }}>
                         ⚠️ هذه الوظائف تعمل محلياً على متصفحك بدون إنترنت. النتائج تقديرية ويمكن استخدام Undo للتراجع.
                       </div>
                     </div>
                   </div>
+                </>
+              )}
 
-                  <div className="panel-heading" style={{ marginTop: "14px" }}>
-                    <span>معرض المرشحات والمؤثرات (Filters)</span>
-                    {filterMode !== "none" && (
-                      <button onClick={() => { setFilterMode("none"); setStatus("تمت إزالة المرشح"); }} title="إلغاء المرشح">
-                        <RotateCcw size={13} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Filter Categories Filter */}
-                  <div className="filter-categories" style={{ padding: "0 17px" }}>
-                    {(["الكل", "تمويه", "حدة", "حواف", "ضوضاء", "هندسية", "لونية", "فنية"] as const).map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        className={`filter-category-btn ${filterCategoryFilter === cat ? "active" : ""}`}
-                        onClick={() => setFilterCategoryFilter(cat)}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Active Filter Parameter Tuning Box */}
-                  {filterMode !== "none" && (() => {
-                    const activeDef = FILTER_CATALOG.find((f) => f.id === filterMode);
-                    if (!activeDef) return null;
-                    return (
-                      <div className="active-filter-card" style={{ margin: "8px 17px" }}>
-                        <div className="active-filter-header">
-                          <span className="active-filter-title">
-                            <Sparkles size={13} /> {activeDef.nameArabic}
-                          </span>
-                          <span className="filter-chip-badge">{activeDef.category}</span>
-                        </div>
-                        <div className="active-filter-desc">{activeDef.description}</div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#8fa9a3", marginBottom: "4px" }}>
-                          <span>{activeDef.intensityLabel || "شدة التأثير"}</span>
-                          <span style={{ color: "#2dd4bf", fontWeight: 700 }}>{filterIntensity}%</span>
-                        </div>
-                        <Slider
-                          value={[filterIntensity]}
-                          min={activeDef.minIntensity ?? 10}
-                          max={activeDef.maxIntensity ?? 100}
-                          step={1}
-                          onValueChange={(val) => setFilterIntensity(val[0])}
-                        />
-                        <div className="active-filter-actions">
-                          <button type="button" className="btn-bake-filter" onClick={applyFilterPermanently} title="تطبيق التأثير نهائياً على الصورة الأصلية">
-                            <Check size={12} /> اعتماد التأثير (Bake)
-                          </button>
-                          <button type="button" className="btn-reset-filter" onClick={() => setFilterMode("none")} title="إلغاء التأثير والعودة للأصل">
-                            إلغاء
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Section 6 & Canva: Live Visual Photo Filter Previews */}
-                  <div style={{ padding: "0 17px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#a855f7", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Sparkles size={13} /> {currentLang === "ar" ? "معاينة حية على صورتك" : "Live Photo Previews"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsFiltersStudioOpen(true)}
-                      className="canva-white-pill-btn"
-                      style={{ fontSize: "10.5px", padding: "4px 10px", gap: "4px" }}
-                    >
-                      <Sparkles size={11} /> {currentLang === "ar" ? "استوديو الفلاتر الموسع" : "Expand Studio"}
-                    </button>
-                  </div>
-
-                  <div className="filter-visual-grid" style={{ margin: "4px 17px 14px" }}>
-                    {FILTER_CATALOG.filter((f) => filterCategoryFilter === "الكل" || f.category === filterCategoryFilter).map((f) => {
-                      const isActive = filterMode === f.id;
-                      const thumb = filterThumbnails[f.id];
-                      return (
-                        <div
-                          key={f.id}
-                          className={`filter-visual-card ${isActive ? "active" : ""}`}
-                          onClick={() => {
-                            setFilterMode(f.id);
-                            if (f.defaultIntensity !== undefined) setFilterIntensity(f.defaultIntensity);
-                            setStatus(`تم تطبيق مرشح: ${f.nameArabic}`);
-                          }}
-                          title={f.description}
-                        >
-                          <div className="filter-visual-thumb-wrap">
-                            {thumb ? (
-                              <img src={thumb} alt={f.nameArabic} className="filter-visual-thumb" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-950">
-                                {f.nameArabic}
-                              </div>
-                            )}
-                            {isActive && (
-                              <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full p-0.5 shadow-md">
-                                <Check size={10} strokeWidth={3} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="filter-visual-meta">
-                            <span className="filter-visual-name">{f.nameArabic}</span>
-                            <span className="filter-visual-badge">{f.category}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="adjustments-actions">
-                    <button type="button" className="btn-apply-adjustments" onClick={applyAdjustments}>
-                      <Check size={14} /> تطبيق التعديلات (Apply)
-                    </button>
-                    <button type="button" className="btn-reset-all" onClick={resetAdjustments}>
-                      إعادة ضبط الكل
-                    </button>
-                  </div>
-
-                  <div style={{ padding: "0 17px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                      <label style={{ fontSize: "10px", color: "#8fa9a3", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={thresholdEnabled}
-                          onChange={(e) => setThresholdEnabled(e.target.checked)}
-                          style={{ accentColor: "#2dd4bf" }}
-                        />
-                        <span>العتبة الثنائية (Threshold B&W)</span>
-                      </label>
-                      <output style={{ color: "#c8d9d5", fontSize: "10px" }}>{threshold}</output>
-                    </div>
-                    {thresholdEnabled && (
-                      <Slider value={[threshold]} min={0} max={255} step={1} onValueChange={(values) => setThreshold(values[0])} />
-                    )}
-                  </div>
-
-                  <div className="transform-actions">
-                    <span>التحويلات الهندسية والأبعاد</span>
-                    <button onClick={() => { setRotation((value) => (value + 90) % 360); setStatus("تم تدوير الصورة 90° مع عقارب الساعة"); }}>تدوير 90° CW</button>
-                    <button onClick={() => { setRotation((value) => (value - 90 + 360) % 360); setStatus("تم تدوير الصورة 90° عكس عقارب الساعة"); }}>تدوير -90° CCW</button>
-                    <button onClick={() => { setRotation((value) => (value + 180) % 360); setStatus("تم تدوير الصورة 180°"); }}>تدوير 180°</button>
-                    <button onClick={() => { setFlipX((value) => !value); setStatus("تم القلب أفقياً"); }}>قلب أفقي ↔</button>
-                    <button onClick={() => { setFlipY((value) => !value); setStatus("تم القلب رأسياً"); }}>قلب رأسي ↕</button>
-                    <button onClick={cropToSquare}>قص مربع 1:1</button>
-                    <button onClick={() => cropToRatio(16, 9)}>قص 16:9</button>
-                    <button onClick={() => cropToRatio(4, 3)}>قص 4:3</button>
-                    <button onClick={() => { setResizeWidth(imageSize.width); setResizeHeight(imageSize.height); setResizeDialogOpen(true); }}>تغيير الحجم...</button>
-                  </div>
-
-                  <div className="selection-actions">
-                    <span>أدوات التحديد والقناع</span>
-                    <div className="selection-modes">
-                      <button className={selectionShape === "rectangle" ? "active" : ""} onClick={() => setSelectionShape("rectangle")}>مستطيل</button>
-                      <button className={selectionShape === "ellipse" ? "active" : ""} onClick={() => setSelectionShape("ellipse")}>بيضاوي</button>
-                      <button className={selectionShape === "free" ? "active" : ""} onClick={() => setSelectionShape("free")}>حر</button>
-                      <button className={selectionMode === "replace" ? "active" : ""} onClick={() => setSelectionMode("replace")}>استبدال</button>
-                      <button className={selectionMode === "add" ? "active" : ""} onClick={() => setSelectionMode("add")}>إضافة</button>
-                      <button className={selectionMode === "subtract" ? "active" : ""} onClick={() => setSelectionMode("subtract")}>طرح</button>
-                      <button onClick={selectAll} title="تحديد كامل الصورة (Ctrl+A)">الكل</button>
-                      <button onClick={deselect} title="إلغاء التحديد (Ctrl+D)">إلغاء</button>
-                      <button onClick={invertSelection} title="عكس نطاق التحديد (Ctrl+Shift+I)">عكس</button>
-                      <button onClick={featherActiveSelection} title="تنعيم حواف التحديد (Feather)">تنعيم</button>
-                      <button onClick={createMaskFromSelection} title="إنشاء قناع غير تدميري">قناع</button>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const activeTextItem = textElements.find((item) => item.id === selectedTextId);
-                    if (!activeTextItem) return null;
-                    return (
-                      <div className="text-editor-panel" style={{ display: "flex", flexDirection: "column", gap: "8px", background: "rgba(45,212,191,0.04)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(45,212,191,0.25)", margin: "8px 12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "11px", fontWeight: "bold", color: "#2dd4bf" }}>تحرير النص — المرحلة 11</span>
-                          <span style={{ fontSize: "9px", color: "#6a8c85" }}>نص مستقل</span>
-                        </div>
-
-                        {/* Text Content */}
-                        <input
-                          value={activeTextItem.text}
-                          onChange={(event) => updateText(event.target.value)}
-                          aria-label="محتوى النص"
-                          placeholder="اكتب النص هنا"
-                          className="modal-input"
-                          style={{ fontSize: "12px", padding: "6px 8px", direction: "rtl" }}
-                        />
-
-                        {/* Font Family */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3", minWidth: "45px" }}>الخط:</span>
-                          <select
-                            value={activeTextItem.fontFamily ?? "Cairo"}
-                            onChange={(e) => { updateTextProp("fontFamily", e.target.value); ensureFontLoaded(e.target.value); }}
-                            className="blend-select"
-                            style={{ fontSize: "11px", flex: 1 }}
-                          >
-                            {GOOGLE_FONTS.map(f => (
-                              <option key={f.name} value={f.name}>{f.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Font Size */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3" }}>الحجم:</span>
-                          <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{Math.round(activeTextItem.size)}px</output>
-                        </div>
-                        <Slider value={[activeTextItem.size]} min={12} max={300} step={1} onValueChange={(vals) => updateTextSize(vals[0])} />
-
-                        {/* Font Weight + Style + Align */}
-                        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                          {(["normal", "600", "bold", "800"] as const).map(w => (
-                            <button key={w} type="button" className={`preset-chip-btn ${(activeTextItem.fontWeight ?? "600") === w ? "active" : ""}`} onClick={() => updateTextProp("fontWeight", w)} style={{ fontWeight: w }}>{w === "normal" ? "رفيع" : w === "600" ? "متوسط" : w === "bold" ? "عريض" : "أعرض"}</button>
-                          ))}
-                          <button type="button" className={`preset-chip-btn ${activeTextItem.fontStyle === "italic" ? "active" : ""}`} onClick={() => updateTextProp("fontStyle", activeTextItem.fontStyle === "italic" ? "normal" : "italic")} style={{ fontStyle: "italic" }}>مائل</button>
-                        </div>
-
-                        {/* Text Align */}
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          {(["right", "center", "left"] as const).map(a => (
-                            <button key={a} type="button" className={`preset-chip-btn ${(activeTextItem.textAlign ?? "center") === a ? "active" : ""}`} onClick={() => updateTextProp("textAlign", a)}>
-                              {a === "right" ? "⇒ يمين" : a === "center" ? "⇔ وسط" : "⇐ يسار"}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Letter Spacing */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3" }}>تباعد الحروف:</span>
-                          <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{activeTextItem.letterSpacing ?? 0}px</output>
-                        </div>
-                        <Slider value={[activeTextItem.letterSpacing ?? 0]} min={-5} max={30} step={0.5} onValueChange={(vals) => updateTextProp("letterSpacing", vals[0])} />
-
-                        {/* Rotation */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3" }}>التدوير:</span>
-                          <output style={{ fontSize: "10px", color: "#2dd4bf" }}>{activeTextItem.rotation ?? 0}°</output>
-                        </div>
-                        <Slider value={[activeTextItem.rotation ?? 0]} min={-180} max={180} step={1} onValueChange={(vals) => updateTextProp("rotation", vals[0])} />
-
-                        {/* Color */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3" }}>لون الخط:</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <input type="color" value={activeTextItem.color} onChange={(e) => updateTextColor(e.target.value)} style={{ width: "26px", height: "24px", padding: 0, border: "none", borderRadius: "4px", cursor: "pointer", background: "transparent" }} title="اختر لون الخط" />
-                            <span style={{ fontSize: "10px", color: "#c8d9d5", fontFamily: "monospace" }}>{activeTextItem.color.toUpperCase()}</span>
-                          </div>
-                        </div>
-
-                        {/* Text Effects */}
-                        <div style={{ fontSize: "10px", fontWeight: "bold", color: "#2dd4bf", marginTop: "4px", borderTop: "1px solid rgba(45,212,191,0.2)", paddingTop: "6px" }}>تأثيرات النص</div>
-
-                        {/* Shadow */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <input type="checkbox" id="shadow-enable" checked={!!activeTextItem.shadowEnabled} onChange={(e) => updateTextProp("shadowEnabled", e.target.checked)} />
-                          <label htmlFor="shadow-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>ظل (Shadow)</label>
-                          {activeTextItem.shadowEnabled && (
-                            <>
-                              <input type="color" value={activeTextItem.shadowColor ?? "#000000"} onChange={(e) => updateTextProp("shadowColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون الظل" />
-                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>إزاحة: X</span>
-                              <input type="number" value={activeTextItem.shadowOffsetX ?? 3} onChange={(e) => updateTextProp("shadowOffsetX", Number(e.target.value))} style={{ width: "38px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
-                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>Y</span>
-                              <input type="number" value={activeTextItem.shadowOffsetY ?? 3} onChange={(e) => updateTextProp("shadowOffsetY", Number(e.target.value))} style={{ width: "38px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
-                            </>
-                          )}
-                        </div>
-
-                        {/* Stroke (Outline) */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <input type="checkbox" id="stroke-enable" checked={!!activeTextItem.strokeEnabled} onChange={(e) => updateTextProp("strokeEnabled", e.target.checked)} />
-                          <label htmlFor="stroke-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>حدود (Stroke)</label>
-                          {activeTextItem.strokeEnabled && (
-                            <>
-                              <input type="color" value={activeTextItem.strokeColor ?? "#000000"} onChange={(e) => updateTextProp("strokeColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون الحدود" />
-                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>سُمك:</span>
-                              <input type="number" min={1} max={20} value={activeTextItem.strokeWidth ?? 2} onChange={(e) => updateTextProp("strokeWidth", Number(e.target.value))} style={{ width: "40px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
-                            </>
-                          )}
-                        </div>
-
-                        {/* Glow */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <input type="checkbox" id="glow-enable" checked={!!activeTextItem.glowEnabled} onChange={(e) => updateTextProp("glowEnabled", e.target.checked)} />
-                          <label htmlFor="glow-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>توهج (Glow)</label>
-                          {activeTextItem.glowEnabled && (
-                            <>
-                              <input type="color" value={activeTextItem.glowColor ?? "#00ffff"} onChange={(e) => updateTextProp("glowColor", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="لون التوهج" />
-                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>قوة:</span>
-                              <input type="number" min={1} max={50} value={activeTextItem.glowBlur ?? 15} onChange={(e) => updateTextProp("glowBlur", Number(e.target.value))} style={{ width: "40px", background: "#1a2828", color: "white", border: "1px solid #2dd4bf40", borderRadius: "4px", padding: "1px 4px", fontSize: "10px" }} />
-                            </>
-                          )}
-                        </div>
-
-                        {/* Gradient */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                          <input type="checkbox" id="grad-enable" checked={!!activeTextItem.gradientEnabled} onChange={(e) => updateTextProp("gradientEnabled", e.target.checked)} />
-                          <label htmlFor="grad-enable" style={{ fontSize: "10px", color: "#8fa9a3", cursor: "pointer" }}>تدرج لوني (Gradient)</label>
-                          {activeTextItem.gradientEnabled && (
-                            <>
-                              <input type="color" value={activeTextItem.gradientColor1 ?? activeTextItem.color} onChange={(e) => updateTextProp("gradientColor1", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="اللون الأول" />
-                              <span style={{ fontSize: "9px", color: "#6a8c85" }}>→</span>
-                              <input type="color" value={activeTextItem.gradientColor2 ?? "#ff6b6b"} onChange={(e) => updateTextProp("gradientColor2", e.target.value)} style={{ width: "22px", height: "20px", padding: 0, border: "none", borderRadius: "3px", cursor: "pointer" }} title="اللون الثاني" />
-                            </>
-                          )}
-                        </div>
-
-                        {/* Position Arrows */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
-                          <span style={{ fontSize: "10px", color: "#8fa9a3" }}>موضع النص:</span>
-                          <div style={{ display: "flex", gap: "4px" }}>
-                            <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(0, -15)} title="تحريك لأعلى">↑</button>
-                            <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(0, 15)} title="تحريك لأسفل">↓</button>
-                            <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(-15, 0)} title="تحريك لليمين">←</button>
-                            <button type="button" className="preset-chip-btn" onClick={() => moveTextPosition(15, 0)} title="تحريك لليسار">→</button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="properties-divider" />
-                  <div className="property-row">
-                    <span>وضع الدمج</span>
-                    <button className="select-control" onClick={cycleBlendMode}>{blendMode} <ChevronDown size={13} /></button>
-                  </div>
-                  <div className="property-row">
-                    <span>نمط الألوان</span>
-                    <span className="value-muted">sRGB IEC61966-2.1</span>
-                  </div>
-                  <div className="property-row">
-                    <span>اللون المحدد</span>
-                    <span className="value-muted">{foregroundColor.toUpperCase()} · {sampledRgb}</span>
+                  <div className="inspector-note">
+                    <span className="note-icon">i</span>
+                    <p>تتم التعديلات بنظام المعالجة غير التدميرية، مع الحفاظ على أصل الصورة وإمكانية التراجع والتصدير بأعلى جودة.</p>
                   </div>
                 </div>
               )}
-
-              <div className="inspector-section">
-                <div className="panel-heading">
-                  <span>الفلاتر ومصفوفات التلافيف السريعة</span>
-                  <button onClick={() => setQuickAdjustmentsOpen((open) => !open)} aria-label="خيارات الفلاتر">
-                    <ChevronDown size={14} />
-                  </button>
-                </div>
-                {quickAdjustmentsOpen ? (
-                  <div className="adjustment-grid">
-                    <button onClick={() => { setFilterMode("blur"); setStatus("تم تطبيق تمويه ضبابي Gaussian Blur"); }}><WandSparkles size={15} /> تمويه Blur</button>
-                    <button onClick={() => { setFilterMode("sharpen"); setStatus("تم تطبيق زيادة الحدة Sharpen 3x3"); }}><SlidersHorizontal size={15} /> حدة Sharpen</button>
-                    <button onClick={() => { setFilterMode("edges"); setStatus("تم تطبيق كشف الحواف Laplacian Edge Detection"); }}><Square size={15} /> حواف Edges</button>
-                    <button onClick={() => { setFilterMode("emboss"); setStatus("تم تطبيق فلتر النقش البارز Emboss"); }}><Sparkles size={15} /> نقش Emboss</button>
-                    <button onClick={() => { setFilterMode("pixelate"); setStatus("تم تطبيق فلتر الفسيفساء والبكسلة Pixelate"); }}><Grid size={15} /> فسيفساء Pixel</button>
-                    <button onClick={() => { setFilterMode("none"); setStatus("تمت إزالة الفلاتر والعودة للأصل"); }}><RotateCcw size={15} /> أصل بدون فلتر</button>
-                  </div>
-                ) : (
-                  <div className="collapsed-note">لوحة الفلاتر السريعة مطوية</div>
-                )}
-              </div>
-
-              <div className="inspector-note">
-                <span className="note-icon">i</span>
-                <p>تتم التعديلات بنظام المعالجة غير التدميرية، مع الحفاظ على أصل الصورة وإمكانية التراجع والتصدير بأعلى جودة.</p>
-              </div>
             </aside>
           )}
         </section>
@@ -7631,6 +8894,95 @@ export default function Home() {
           }}
           imageMeta={droppedImageMeta}
           onSelectAction={handleSmartDropAction}
+          lang={currentLang}
+        />
+
+        {/* Phase 2: Command Palette Modal (Ctrl+K) */}
+        <CommandPaletteModal
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          commands={commandList}
+          lang={currentLang}
+        />
+
+        {/* Phase 2: Context Menu (Right Click on Canvas) */}
+        <CanvasContextMenu
+          isOpen={isContextMenuOpen}
+          x={contextMenuPos.x}
+          y={contextMenuPos.y}
+          onClose={() => setIsContextMenuOpen(false)}
+          onDuplicateLayer={duplicateSelectedLayer}
+          onDeleteLayer={removeSelectedLayer}
+          onToggleLockLayer={() => toggleLayerLock(selectedLayer)}
+          isLayerLocked={layers.find((l) => l.id === selectedLayer)?.locked}
+          onMergeDown={mergeLayerDown}
+          onBringForward={moveLayerUp}
+          onSendBackward={moveLayerDown}
+          onAiCutout={handlePureContentCutout}
+          onFitScreen={fitToScreen}
+          onExportLayer={exportSelectedLayer}
+          lang={currentLang}
+        />
+
+        {/* Phase 3: Projects Dashboard Modal */}
+        <ProjectsDashboardModal
+          isOpen={isProjectsDashboardOpen}
+          onClose={() => setIsProjectsDashboardOpen(false)}
+          projects={registeredProjects}
+          onOpenProject={handleOpenRegisteredProject}
+          onNewProject={() => {
+            setIsProjectsDashboardOpen(false);
+            setIsCreativeLibraryOpen(true);
+          }}
+          onImportProjectFile={() => projectFileInputRef.current?.click()}
+          onDuplicateProject={handleDuplicateRegisteredProject}
+          onRenameProject={handleRenameRegisteredProject}
+          onToggleFavorite={handleToggleFavoriteProject}
+          onMoveToTrash={handleMoveProjectToTrash}
+          onRestoreFromTrash={handleRestoreProjectFromTrash}
+          onPermanentDelete={handlePermanentDeleteProject}
+          onExportProjectFile={handleExportRegisteredProject}
+          lang={currentLang}
+        />
+
+        {/* Phase 3: Version History Modal */}
+        <VersionHistoryModal
+          isOpen={isVersionHistoryOpen}
+          onClose={() => setIsVersionHistoryOpen(false)}
+          snapshots={projectSnapshots}
+          onRestoreSnapshot={handleRestoreSnapshot}
+          onCreateManualSnapshot={handleCreateManualSnapshot}
+          onDeleteSnapshot={handleDeleteSnapshot}
+          lang={currentLang}
+        />
+
+        {/* Phase 4 & 5: Creative Library Hub (Backgrounds, Templates, Assets) */}
+        <CreativeLibraryModal
+          isOpen={isCreativeLibraryOpen}
+          onClose={() => setIsCreativeLibraryOpen(false)}
+          onApplyBackground={handleApplyCreativeBackground}
+          onApplyTemplate={handleApplyEditableTemplate}
+          onAddAssetLayer={handleAddAssetGraphic}
+          onOpenProject={handleOpenRegisteredProject}
+          projects={registeredProjects}
+          lang={currentLang}
+        />
+
+        {/* Phase 7: Watermark Studio Modal */}
+        <WatermarkModal
+          isOpen={isWatermarkOpen}
+          onClose={() => setIsWatermarkOpen(false)}
+          onApplyWatermark={handleApplyWatermark}
+          lang={currentLang}
+        />
+
+        {/* Phase 7: Multi-Size Batch Export Modal */}
+        <MultiSizeExportModal
+          isOpen={isMultiExportOpen}
+          onClose={() => setIsMultiExportOpen(false)}
+          originalWidth={imageSize.width || 1080}
+          originalHeight={imageSize.height || 1080}
+          onExecuteMultiExport={handleExecuteMultiExport}
           lang={currentLang}
         />
       </main>
