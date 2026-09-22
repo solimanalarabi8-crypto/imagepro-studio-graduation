@@ -647,7 +647,7 @@ export default function Home() {
   const [isPanning, setIsPanning] = useState(false);
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
-  const [foregroundColor, setForegroundColor] = useState("#2dd4bf");
+  const [foregroundColor, setForegroundColor] = useState("#0057ff");
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [brushOpacity, setBrushOpacity] = useState(100);
   const [brushHardness, setBrushHardness] = useState(100);
@@ -696,8 +696,13 @@ export default function Home() {
 
   // Global i18n & Theme State
   const [currentLang, setCurrentLang] = useState<Language>("ar");
-  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
+  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("light");
   const t = i18n[currentLang];
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light-theme", currentTheme === "light");
+    document.documentElement.classList.toggle("dark-theme", currentTheme === "dark");
+  }, [currentTheme]);
 
   // Automate properties section and tabs to match active tool
   useEffect(() => {
@@ -5503,7 +5508,7 @@ export default function Home() {
           <div className="command-bar-tier1">
             <div className="brand-lockup">
               <div className="brand-mark">
-                <img src="/assets/imagepro-logo.png" alt="ImagePro Logo" />
+                <img src="/logo.png?v=ip" alt="ImagePro Studio Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
               <div>
                 <div className="brand-name">ImagePro <span>Studio</span></div>
@@ -5804,6 +5809,7 @@ export default function Home() {
                   const nextTheme = currentTheme === "dark" ? "light" : "dark";
                   setCurrentTheme(nextTheme);
                   document.documentElement.classList.toggle("light-theme", nextTheme === "light");
+                  document.documentElement.classList.toggle("dark-theme", nextTheme === "dark");
                 }}
                 className="tier1-search-trigger"
                 style={{ padding: "4px 8px" }}
@@ -5831,13 +5837,6 @@ export default function Home() {
               <button
                 onClick={() => setIsNewDesignModalOpen(true)}
                 className="studio-hero-pill studio-hero-pill-new-design"
-                style={{
-                  background: "linear-gradient(135deg, #06b6d4 0%, #14b8a6 100%)",
-                  color: "#020617",
-                  fontWeight: 700,
-                  boxShadow: "0 2px 10px rgba(6, 182, 212, 0.35)",
-                  border: "1px solid rgba(255, 255, 255, 0.3)"
-                }}
                 title={currentLang === "ar" ? "بدء تصميم جديد بجميع المقاسات والمنصات" : "Create New Design"}
                 data-testid="hero-new-design-btn"
               >
@@ -5845,58 +5844,58 @@ export default function Home() {
                 <span>{currentLang === "ar" ? "＋ تصميم جديد" : "＋ New Design"}</span>
               </button>
 
-              {/* 1. المكتبة الإبداعية الشاملة (Royal Purple Gradient - Pixelora Grade) */}
+              {/* 1. المكتبة الإبداعية الشاملة */}
               <button
                 onClick={() => setIsCreativeLibraryOpen(true)}
-                className="studio-hero-pill studio-hero-pill-creative"
+                className="studio-hero-pill"
                 title={currentLang === "ar" ? "المكتبة الإبداعية الشاملة (أصول، عناصر، خلفيات)" : "Creative Library Hub"}
                 data-testid="pixelora-creative-library"
               >
-                <Sparkles size={14} />
+                <Sparkles size={14} style={{ color: "#0ea5e9" }} />
                 <span>{currentLang === "ar" ? "المكتبة الإبداعية" : "Creative Library"}</span>
               </button>
 
-              {/* 2. القوالب الجاهزة (Rose/Magenta Gradient) */}
+              {/* 2. القوالب الجاهزة */}
               <button
                 onClick={() => setIsTemplatesModalOpen(true)}
-                className="studio-hero-pill studio-hero-pill-templates"
+                className="studio-hero-pill"
                 title={currentLang === "ar" ? "قوالب احترافية قابلة للتعديل والمقاسات الجاهزة" : "Live Templates"}
                 data-testid="studio-templates"
               >
-                <Square size={13} style={{ transform: "rotate(45deg)" }} />
+                <Square size={13} style={{ transform: "rotate(45deg)", color: "#0ea5e9" }} />
                 <span>{currentLang === "ar" ? "قوالب جاهزة" : "Templates"}</span>
               </button>
 
-              {/* 3. استوديو الخلفيات (Ocean Blue Gradient) */}
+              {/* 3. استوديو الخلفيات */}
               <button
                 onClick={() => setIsProductBgModalOpen(true)}
-                className="studio-hero-pill studio-hero-pill-backdrops"
+                className="studio-hero-pill"
                 title={currentLang === "ar" ? "استوديو خلفيات المنتجات والبورتريه المبتكرة" : "Studio Backdrops"}
                 data-testid="studio-backdrops"
               >
-                <ImageIcon size={14} />
+                <ImageIcon size={14} style={{ color: "#0ea5e9" }} />
                 <span>{currentLang === "ar" ? "استوديو الخلفيات" : "Backdrops"}</span>
               </button>
 
-              {/* 4. لوحة المشاريع وسجل الإصدارات (Electric Sapphire Gradient - Luxury Style) */}
+              {/* 4. لوحة المشاريع وسجل الإصدارات */}
               <button
                 onClick={() => setIsProjectsDashboardOpen(true)}
-                className="studio-hero-pill studio-hero-pill-projects"
+                className="studio-hero-pill"
                 title={currentLang === "ar" ? "لوحة المشاريع المحفوظة والنسخ الاحتياطية" : "Projects Dashboard"}
                 data-testid="studio-projects"
               >
-                <Folder size={14} />
+                <Folder size={14} style={{ color: "#0ea5e9" }} />
                 <span>{currentLang === "ar" ? "المشاريع" : "Projects"}</span>
               </button>
 
-              {/* 5. تصدير متعدد القياسات (Amber/Orange Gradient) */}
+              {/* 5. تصدير متعدد القياسات */}
               <button
                 onClick={() => setIsMultiExportOpen(true)}
-                className="studio-hero-pill studio-hero-pill-amber"
+                className="studio-hero-pill"
                 title={currentLang === "ar" ? "تصدير دفعي لكافة منصات التواصل بنقرة واحدة" : "Multi-Size Export"}
                 data-testid="studio-multi-export"
               >
-                <Download size={14} />
+                <Download size={14} style={{ color: "#0ea5e9" }} />
                 <span>{currentLang === "ar" ? "تصدير متعدد" : "Multi-Export"}</span>
               </button>
             </div>
@@ -5910,52 +5909,20 @@ export default function Home() {
                 data-testid="save-project"
                 title={currentLang === "ar" ? "حفظ المشروع محلياً في المتصفح (Ctrl+S)" : "Save Project Locally"}
               >
-                <span className="save-dot" />
+                <span className="save-dot" style={{ background: "#0ea5e9" }} />
                 <span>{isRendering ? (currentLang === "ar" ? "جارٍ الحفظ..." : "Saving...") : (currentLang === "ar" ? "حفظ" : "Save")}</span>
               </button>
 
-              {/* Export Dropdown */}
-              <div className="app-dropdown-container">
-                <button
-                  className="pixelora-pill-export"
-                  onClick={() => setActiveMenu(activeMenu === "export" ? null : "export")}
-                  data-testid="export-png"
-                  title={currentLang === "ar" ? "تصدير الصورة بجودة عالية" : "Export High-Res Image"}
-                >
-                  <Download size={14} />
-                  <span>{currentLang === "ar" ? "تصدير" : "Export"}</span>
-                  <ChevronDown size={12} />
-                </button>
-                {activeMenu === "export" && (
-                  <div className="app-dropdown-menu align-left">
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("png"); }}>
-                      <span className="app-menu-item-left"><Download size={14} /> تصدير PNG (شفافية كاملة)</span>
-                      <span className="app-menu-badge">PNG</span>
-                    </button>
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("jpeg", 92); }}>
-                      <span className="app-menu-item-left"><Download size={14} /> تصدير JPG (جودة 92%)</span>
-                      <span className="app-menu-badge">JPG</span>
-                    </button>
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); exportImage("webp", 90); }}>
-                      <span className="app-menu-item-left"><Download size={14} /> تصدير WebP (ضغط متقدم)</span>
-                      <span className="app-menu-badge">WebP</span>
-                    </button>
-                    <div className="app-menu-separator" />
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsMultiExportOpen(true); }}>
-                      <span className="app-menu-item-left"><Download size={14} /> 🚀 تصدير متعدد القياسات (Multi-Size)...</span>
-                      <span className="app-menu-badge">Batch</span>
-                    </button>
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setIsWatermarkOpen(true); }}>
-                      <span className="app-menu-item-left"><Stamp size={14} /> 🛡️ استوديو العلامة المائية...</span>
-                      <span className="app-menu-badge">Watermark</span>
-                    </button>
-                    <div className="app-menu-separator" />
-                    <button className="app-menu-item" onClick={() => { setActiveMenu(null); setExportOptionsOpen(true); }}>
-                      <span className="app-menu-item-left"><Settings2 size={14} /> خيارات تصدير مخصصة...</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Export Button — opens advanced export modal directly */}
+              <button
+                className="pixelora-pill-export"
+                onClick={() => setExportOptionsOpen(true)}
+                data-testid="export-png"
+                title={currentLang === "ar" ? "تصدير الصورة بجودة عالية" : "Export High-Res Image"}
+              >
+                <Download size={14} />
+                <span>{currentLang === "ar" ? "تصدير" : "Export"}</span>
+              </button>
             </div>
           </div>
         </header>
@@ -6014,7 +5981,7 @@ export default function Home() {
                       max={250}
                       value={brushSize}
                       onChange={(e) => setBrushSize(Number(e.target.value))}
-                      style={{ width: "80px", accentColor: "#f43f5e" }}
+                      style={{ width: "80px", accentColor: "#0ea5e9" }}
                     />
                     <span className="tool-opt-value">{brushSize}px</span>
                   </div>
@@ -6027,7 +5994,7 @@ export default function Home() {
                       max={100}
                       value={brushHardness}
                       onChange={(e) => setBrushHardness(Number(e.target.value))}
-                      style={{ width: "70px", accentColor: "#f43f5e" }}
+                      style={{ width: "70px", accentColor: "#0ea5e9" }}
                     />
                     <span className="tool-opt-value">{brushHardness}%</span>
                   </div>
@@ -6663,24 +6630,25 @@ export default function Home() {
                     alignItems: "center",
                     gap: "10px",
                     padding: "8px 16px",
-                    borderRadius: "8px",
-                    background: "rgba(15, 23, 42, 0.92)",
-                    border: "1px solid rgba(45, 212, 191, 0.3)",
-                    boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
-                    color: "#f8fafc",
-                    fontSize: "13px",
+                    borderRadius: "9999px",
+                    background: "#ffffff",
+                    border: "1px solid #e0f0ff",
+                    boxShadow: "0 8px 30px rgba(0,87,255,0.15)",
+                    color: "#1c1917",
+                    fontSize: "12px",
+                    fontWeight: 600,
                     backdropFilter: "blur(12px)"
                   }}
                 >
-                  <span style={{ fontSize: "16px" }}>⚠️</span>
+                  <span style={{ fontSize: "15px" }}>⚠️</span>
                   <span>
                     {currentLang === "ar"
                       ? "تم العثور على جلسة عمل سابقة غير محفوظة (حفظ تلقائي)."
                       : "An unsaved work session was recovered."}
                   </span>
                   <button
-                    className="btn-primary"
-                    style={{ padding: "4px 10px", fontSize: "12px", height: "auto" }}
+                    className="picsart-btn-burgundy picsart-pill"
+                    style={{ padding: "4px 12px", fontSize: "11px", height: "auto" }}
                     onClick={() => {
                       try {
                         const parsed = JSON.parse(autosaveRecoverCandidate.data);
@@ -6695,8 +6663,8 @@ export default function Home() {
                     {currentLang === "ar" ? "استعادة الجلسة" : "Recover Session"}
                   </button>
                   <button
-                    className="btn-secondary"
-                    style={{ padding: "4px 8px", fontSize: "12px", height: "auto" }}
+                    className="picsart-btn-secondary picsart-pill"
+                    style={{ padding: "4px 10px", fontSize: "11px", height: "auto" }}
                     onClick={() => {
                       clearAutosaveRecovery();
                       setAutosaveRecoverCandidate(null);
@@ -6778,8 +6746,8 @@ export default function Home() {
                       height: `${Math.max(8, (activeTool === "clone" || activeTool === "heal" ? retouchRadius * 2 : brushSize) / Math.max(1, canvasRef.current?.width || 1) * (canvasRef.current?.clientWidth || 300))}px`,
                       transform: "translate(-50%, -50%)",
                       borderRadius: "50%",
-                      border: activeTool === "eraser" ? "2px dashed #f43f5e" : activeTool === "clone" || activeTool === "heal" ? "2px dashed #38bdf8" : `2px solid ${foregroundColor}`,
-                      backgroundColor: activeTool === "eraser" ? "rgba(244, 63, 94, 0.16)" : activeTool === "clone" || activeTool === "heal" ? "rgba(56, 189, 248, 0.16)" : `${foregroundColor}22`,
+                      border: activeTool === "eraser" ? "2px dashed #0ea5e9" : activeTool === "clone" || activeTool === "heal" ? "2px dashed #38bdf8" : `2px solid ${foregroundColor}`,
+                      backgroundColor: activeTool === "eraser" ? "rgba(14,165,233,0.16)" : activeTool === "clone" || activeTool === "heal" ? "rgba(56, 189, 248, 0.16)" : `${foregroundColor}22`,
                       pointerEvents: "none",
                       zIndex: 20,
                       boxShadow: "0 0 6px rgba(0,0,0,0.6)",
@@ -6793,7 +6761,7 @@ export default function Home() {
                         width: "3px",
                         height: "3px",
                         borderRadius: "50%",
-                        backgroundColor: activeTool === "eraser" ? "#f43f5e" : activeTool === "clone" || activeTool === "heal" ? "#38bdf8" : foregroundColor,
+                        backgroundColor: activeTool === "eraser" ? "#0ea5e9" : activeTool === "clone" || activeTool === "heal" ? "#38bdf8" : foregroundColor,
                       }}
                     />
                   </div>
@@ -8716,10 +8684,38 @@ export default function Home() {
           <div className="modal-backdrop" onClick={() => setExportOptionsOpen(false)}>
             <div className="modal-window" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h3><Download size={16} /> خيارات التصدير المتقدم</h3>
+                <h3><Download size={16} /> تصدير الصورة</h3>
                 <button className="modal-close-btn" onClick={() => setExportOptionsOpen(false)}><X size={16} /></button>
               </div>
               <div className="modal-body">
+                {/* Quick Export Buttons */}
+                <div className="modal-field">
+                  <label style={{ marginBottom: "8px", display: "block", color: "var(--studio-text-muted, #78716c)", fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase" }}>تصدير سريع</label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      className="btn-primary"
+                      style={{ flex: 1, fontSize: "12px", padding: "10px 8px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                      onClick={() => { setExportOptionsOpen(false); exportImage("png"); }}
+                    >
+                      <Download size={13} /> PNG
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ flex: 1, fontSize: "12px", padding: "10px 8px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                      onClick={() => { setExportOptionsOpen(false); exportImage("jpeg", 92); }}
+                    >
+                      <Download size={13} /> JPG
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ flex: 1, fontSize: "12px", padding: "10px 8px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                      onClick={() => { setExportOptionsOpen(false); exportImage("webp", 90); }}
+                    >
+                      <Download size={13} /> WebP
+                    </button>
+                  </div>
+                </div>
+                <div className="app-menu-separator" style={{ margin: "12px 0" }} />
                 <div className="modal-field">
                   <label>اسم الملف عند التحميل</label>
                   <input
@@ -9204,7 +9200,7 @@ function HistogramViewer({ data }: { data: HistogramData | null }) {
         <line x1="128" y1="0" x2="128" y2={height} stroke="rgba(255,255,255,0.06)" />
         <line x1="192" y1="0" x2="192" y2={height} stroke="rgba(255,255,255,0.06)" />
         <polygon points={`0,${height} ${pointsLum} ${width - 1},${height}`} fill="rgba(255, 255, 255, 0.12)" />
-        <polyline points={pointsR} fill="none" stroke="rgba(244, 63, 94, 0.7)" strokeWidth="1" />
+        <polyline points={pointsR} fill="none" stroke="rgba(14,165,233,0.7)" strokeWidth="1" />
         <polyline points={pointsG} fill="none" stroke="rgba(52, 211, 153, 0.7)" strokeWidth="1" />
         <polyline points={pointsB} fill="none" stroke="rgba(96, 165, 250, 0.7)" strokeWidth="1" />
         <polyline points={pointsLum} fill="none" stroke="rgba(255, 255, 255, 0.9)" strokeWidth="1.2" />
@@ -9260,3 +9256,6 @@ function Adjustment({
     </div>
   );
 }
+
+
+

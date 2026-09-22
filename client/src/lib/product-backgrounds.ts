@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Product Showcase Backgrounds Engine
  * High-definition procedural studio backdrops for commercial product presentation
  */
@@ -313,7 +313,7 @@ export const PRODUCT_BACKGROUNDS: ProductBackgroundPreset[] = [
       ctx.shadowBlur = 20;
       ctx.stroke();
 
-      ctx.strokeStyle = "#f43f5e";
+      ctx.strokeStyle = "#0ea5e9";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.ellipse(podX, podY, (podW / 2) * 0.88, (podH / 2) * 0.88, 0, 0, Math.PI * 2);
@@ -585,3 +585,4 @@ export function generateProductBackgroundUrl(presetId: string, width = 1920, hei
   }
   return offscreen.toDataURL("image/png");
 }
+

@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImagePro Studio - التقرير التقني الشامل وتوثيق الواجهات والمحركات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --secondary: #8b5cf6;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.8;
+      padding: 30px 20px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ─── Cover Page ─── */
+    .cover-page {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0369a1 100%);
+      color: #ffffff;
+      border-radius: var(--radius-lg);
+      padding: 60px 45px;
+      margin-bottom: 45px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.18);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cover-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 6px 20px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    .cover-title {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+      background: linear-gradient(to left, #38bdf8, #ffffff, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .cover-subtitle {
+      font-size: 22px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 25px;
+    }
+
+    .cover-team {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      max-width: 780px;
+      margin: 0 auto;
+      backdrop-filter: blur(12px);
+    }
+
+    .cover-team h3 {
+      font-size: 16px;
+      color: #38bdf8;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+    }
+
+    .team-card {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* ─── Chapters and Sections ─── */
+    .chapter {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 38px 42px;
+      margin-bottom: 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    }
+
+    .chapter-header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 28px;
+    }
+
+    .chapter-num {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .chapter-title {
+      font-size: 27px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+    }
+
+    /* ─── Figures and Detailed Explanations ─── */
+    .figure-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin: 35px 0;
+      box-shadow: 0 6px 25px rgba(0,0,0,0.05);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .figure-preview {
+      background: #090d16;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .figure-preview img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display: block;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+    }
+
+    .figure-details {
+      padding: 28px 32px;
+    }
+
+    .figure-caption {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .figure-caption span {
+      background: #e0f2fe;
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .figure-desc {
+      font-size: 15.5px;
+      color: #334155;
+      line-height: 1.85;
+      margin-bottom: 20px;
+    }
+
+    /* ─── Deep Feature Breakdown Styling ─── */
+    .breakdown-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin: 18px 0;
+    }
+
+    .breakdown-block-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px dashed #cbd5e1;
+      padding-bottom: 8px;
+    }
+
+    .breakdown-block-title .icon {
+      font-size: 18px;
+    }
+
+    .breakdown-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .breakdown-list li {
+      font-size: 14.5px;
+      line-height: 1.8;
+      color: #334155;
+      margin-bottom: 10px;
+      padding-right: 22px;
+      position: relative;
+    }
+
+    .breakdown-list li::before {
+      content: "✦";
+      position: absolute;
+      right: 0;
+      color: var(--primary);
+      font-size: 13px;
+      top: 0;
+    }
+
+    .breakdown-list strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .tech-pill {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      margin: 0 2px;
+    }
+
+    .math-formula {
+      direction: ltr;
+      text-align: center;
+      background: #0f172a;
+      color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin: 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+      overflow-x: auto;
+    }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+      background: #f1f5f9;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .spec-item {
+      font-size: 13.5px;
+    }
+
+    .spec-item strong {
+      color: var(--text-main);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .spec-item span {
+      color: var(--text-muted);
+    }
+
+    /* ─── Tables ─── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 22px 0;
+      font-size: 14.5px;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: var(--text-main);
+      font-weight: 700;
+      text-align: right;
+      padding: 12px 14px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: #334155;
+    }
+
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .badge-success {
+      background: #dcfce7;
+      color: #15803d;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* ─── Print Stylesheet ─── */
+    @media print {
+      body { background: #ffffff; color: #000; padding: 0; font-size: 11pt; }
+      .container { max-width: 100%; padding: 0; }
+      .cover-page { page-break-after: always; min-height: 95vh; border-radius: 0; }
+      .chapter { border: none; box-shadow: none; padding: 18px 0; page-break-after: always; }
+      .figure-card { page-break-inside: avoid; border: 1px solid #ddd; box-shadow: none; margin: 20px 0; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       صفحة الغلاف الرسمية
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="cover-page">
+    <div class="cover-badge">جامعة إب • كلية الحاسوب وتكنولوجيا المعلومات • 2026</div>
+    <h1 class="cover-title">ImagePro Studio</h1>
+    <h2 class="cover-subtitle">التقرير التقني الشامل وتوثيق الواجهات الهندسية والمحركات الرياضية</h2>
+    <p style="color: #cbd5e1; font-size: 15.5px; max-width: 780px; margin: 0 auto 25px auto;">
+      دليل توثيقي شامل وتفصيلي يشرح كل واجهة، وكل جزء مرئي، وكل زر، وكل خاصية، مع الأسس الرياضية والهندسية للالتفاف المكاني، والمدرج التكراري اللحظي، ومحرك الفرشاة التنعيمية، ونموذج الذكاء الاصطناعي IS-Net، واختبارات الجودة.
+    </p>
+
+    <div class="cover-team">
+      <h3>فريق الإعداد والتطوير الهندسي للمشروع</h3>
+      <div class="team-grid">
+        <div class="team-card">م. سليمان العربي</div>
+        <div class="team-card">م. يعقوب المهاجري</div>
+        <div class="team-card">م. مالك عادل</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل الأول: مساحة العمل وواجهة المستخدم (الوضع الفاتح والوضع الليلي)
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل الأول</div>
+      <h2 class="chapter-title">واجهة المستخدم ومساحة العمل وشريط الأوامر</h2>
+    </div>
+    <p style="margin-bottom: 22px; font-size: 16px;">
+      تم تصميم بنية الواجهة التفاعلية لنظام <strong>ImagePro Studio</strong> وفق المعيار الاحترافي المزدوج (Two-Tier UI Architecture)، الذي يوفر وصولاً سريعاً لجميع الوظائف المعقدة دون تشويش بصري، مع دعم التبديل الديناميكي الكامل بين الوضع الفاتح والوضع الليلي (Dark Studio Mode).
+    </p>
+
+    <!-- الشكل 1: مساحة العمل الرئيسية (الوضع الفاتح) -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/01_main_workspace.png" alt="مساحة العمل الرئيسية الفاتحة">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 1</span> مساحة العمل المتكاملة لنظام ImagePro Studio (الوضع النهاري الفاتح) مع الشعار الجديد
+        </div>
+        <div class="figure-desc">
+          توضح اللقطة مساحة العمل الرئيسية للنظام في وضع الإضاءة النهاري بكامل قطاعاتها التفاعلية، مع ظهور الشعار الرسمي الجديد المطور في الزاوية العلوية اليمنى، وشريط النظام، وشريط الإبداع، وصندوق الأدوات، والكانفاس المركزي المحاط بالمساطر الذكية.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والقطاعات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>شعار المنصة الرسمي وبطاقة الإصدار (أعلى اليمين):</strong> أيقونة العدسة والكاميرا التجريدية بألوان أطياف الضوء مع اسم النظام <span class="tech-pill">ImagePro Studio</span> وبطاقة الإصدار <span class="tech-pill">v3.2.0 Pro</span>.</li>
+            <li><strong>شريط النظام العلوي (Tier 1 Menu Bar):</strong> يحتوي على القوائم الرئيسية السبع: ملف (File)، تعديل (Edit)، صورة (Image)، طبقة (Layer)، مرشحات (Filter)، عرض (View)، ومساعدة (Help)، إلى جانب زري التراجع والإعادة (Undo/Redo) ومؤشر حفظ المشروع.</li>
+            <li><strong>شريط استوديو الإبداع (Tier 2 Hero Ribbon):</strong> شريط كبسولي عائم يضم أزرار الوظائف الكبرى: زر «＋ تصميم جديد»، «المكتبة الإبداعية»، «قوالب جاهزة»، «استوديو الخلفيات»، «المشاريع»، و«تصدير متعدد».</li>
+            <li><strong>شريط خيارات الأداة السياقي (Contextual Tool Options Bar):</strong> يقع أسفل شريط الإبداع مباشرة، ويتغير محتواه لحظياً بحسب الأداة النشطة ليعرض (حجم الفرشاة، نسبة الشفافية، زاوية التدوير، نوع الخط، أو تسامح التحديد).</li>
+            <li><strong>صندوق الأدوات الرأسي الأيسر (Primary Toolbar):</strong> يضم 12 أداة هندسية أساسية مع محدد عينات الألوان الأمامية والخلفية وزر التبديل السريع [X].</li>
+            <li><strong>منطقة الكانفاس المركزية (Canvas Viewport):</strong> مسطح العمل بدقة <span class="tech-pill">2176 × 1632 px</span>، محاط بمساطر بكسلية متدرجة ديناميكياً (Pixel Rulers) وأدلة محاذاة مغناطيسية ذكية (Smart Snapping Guides).</li>
+            <li><strong>شريط الحالة السفلي (Status Bar):</strong> يعرض إحداثيات مؤشر الفأرة الحية <span class="tech-pill">X: 1088, Y: 816</span>، ونسبة التكبير الحالية (Zoom %)، ونمط الألوان (sRGB 8-bit).</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">⚙️</span> ثانياً: شرح كل أداة وخاصية في شريط الأدوات الأيسر</div>
+          <ul class="breakdown-list">
+            <li><strong>أداة التحريك والتحديد الحر (Move & Transform - V):</strong> تحريك الطبقات على الكانفاس، وتفعيل مقابض التحجيم والتدوير الثمانية (Bounding Box) مع دعم التحويل الحر.</li>
+            <li><strong>أداة التحديد المستطيلي والبيضاوي (Marquee Select - M):</strong> تحديد مناطق هندسية بكسلية وتطبيق القص، النسخ، أو الفلاتر على المنطقة المحددة حصراً.</li>
+            <li><strong>أداة حبل التحديد الحر والمضلع (Lasso Tool - L):</strong> رسم مسارات تحديد يدوية حرة أو مضلعة حول الأجسام المعقدة.</li>
+            <li><strong>أداة العصا السحرية (Magic Wand - W):</strong> تحديد المساحات اللونية المتشابهة تلقائياً بناءً على خوارزمية المسافة اللونية الإقليدية مع منزلق التسامح (Tolerance).</li>
+            <li><strong>أداة الفرشاة الفنية (Brush Tool - B):</strong> الرسم اليدوي الانسيابي بخوارزميات تنعيم أقواس بيزيه لمنع الرعشة اليدوية.</li>
+            <li><strong>أداة الممحاة (Eraser - E):</strong> مسح البكسلات أو محتويات الطبقة مع التحكم بصلابة الحواف وشفافية المسح.</li>
+            <li><strong>أداة سطل الطلاء والملء الفيضاني (Paint Bucket - G):</strong> تعبئة المساحات المغلقة بلون نقي أو تدرج خطي/دائري بناءً على خوارزمية BFS.</li>
+            <li><strong>أداة النصوص المطبعية (Typography Tool - T):</strong> كتابة نصوص متجهة تدعم الخطوط العربية واللاتينية مع التحكم الكامل في الحجم، التباعد، والارتفاع.</li>
+            <li><strong>أداة الأشكال المتجهة (Shapes Tool - U):</strong> رسم المستطيلات، الدوائر، المثلثات، الأسهم، والنجوم مع التحكم في لون التعبئة وسمك الإطار الخارجي.</li>
+            <li><strong>أداة القطارة اللونية (Eyedropper - I):</strong> امتصاص القيمة اللونية الدقيقة لأي بكسل على الكانفاس ونقلها كعينّة نشطة.</li>
+            <li><strong>أداة اليد للتجول (Hand Tool - H):</strong> تحريك وإزاحة مشهد العرض للتنقل المريح داخل الصورة عند التكبير.</li>
+            <li><strong>أداة التكبير والتصغير (Zoom Tool - Z):</strong> تكبير وتصغير مساحة العرض بنسب دقيقة تبدأ من 10% وتصل حتى 800% مع الحفاظ على وضوح المعاينة.</li>
+          </ul>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>الأبعاد المعروضة:</strong><span>2176 × 1632 بكسل (8-bit sRGB)</span></div>
+          <div class="spec-item"><strong>المحرك الرسومي:</strong><span>Canvas 2D High-DPI Engine</span></div>
+          <div class="spec-item"><strong>نظام المحاذاة:</strong><span>Smart Snap Guides مع مساطر تفاعلية</span></div>
+          <div class="spec-item"><strong>نمط الإضاءة:</strong><span>Light Daylight Mode (#f8fafc)</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 2: مساحة العمل في الوضع الليلي المحدث -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/02_dark_mode_workspace.png" alt="مساحة العمل بالوضع الليلي">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 2</span> مساحة العمل المحدثة في الوضع الليلي (Dark Studio Mode) مع لوحة الطبقات النشطة
+        </div>
+        <div class="figure-desc">
+          لقطة حية ومباشرة من النظام في الوضع الليلي الاحترافي الداكن المصمم لتقليل إجهاد العين ورفع دقة التباين اللوني، يظهر فيها الشعار الجديد ولوحة الطبقات (Layers Panel) مفتوحة بالكامل لاستعراض معمارية الطبقات غير التدميرية.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والقطاعات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>سمة الاستوديو المظلمة (Dark Slate Theme):</strong> استخدام ألوان خلفية مدروسة بعناية <span class="tech-pill">#0f172a</span> و <span class="tech-pill">#1e293b</span> مع حدود رمادية ناعمة ونصوص واضحة وعالية التباين.</li>
+            <li><strong>ترويسة لوحة الطبقات (Layers Header):</strong> شريط علوي يحتوي على أزرار: إضافة طبقة فارغة جديدة (+)، تكرار الطبقة النشطة (Duplicate)، وحذف الطبقة المحددة (Trash).</li>
+            <li><strong>قائمة أنماط المزج والدمج (Blending Modes Dropdown):</strong> قائمة منسدلة تضم 17 نمط دمج رياضي، تتيح اختيار كيفية تفاعل بكسلات الطبقة مع الطبقات التي أسفلها.</li>
+            <li><strong>منزلق عتامة الطبقة (Layer Opacity Slider):</strong> منزلق تفاعلي دقيق يتيح ضبط شفافية الطبقة من 0% (شفافة تماماً) إلى 100% (معتمة كلياً) مع إدخال رقمي مباشر.</li>
+            <li><strong>قائمة الطبقات التراكمية (Layers Stack):</strong> استعراض الطبقات الثلاث النشطة بالترتيب الرأسي (Z-Index)، مع معاينات حية مصغرة (Thumbnails) يتم تحديثها فورياً مع كل تعديل.</li>
+            <li><strong>أزرار التحكم الفردي بالطبقة:</strong> أيقونة العين (Eye Icon) لإظهار/إخفاء الطبقة لحظياً، أيقونة القفل (Lock Icon) لحماية محتويات الطبقة من التعديل العرضي، ومؤشر قناع الطبقة (Mask Indicator).</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📐</span> ثانياً: الأساس الرياضي والهندسي لمعمارية الطبقات</div>
+          <ul class="breakdown-list">
+            <li><strong>التصيير الطبقي غير التدميري (Non-Destructive Composite Rendering):</strong> يتم حفظ كل طبقة في كائن منفصل يحوي <span class="tech-pill">ImageData</span> ومصفوفة التحويل <span class="tech-pill">TransformMatrix</span>، ويتم دمج الكانفاس النهائي دورياً دون المساس بالأصل.</li>
+            <li><strong>معادلة دمج التراكب (Multiply Blending Formula):</strong>
+              <div class="math-formula">C_result = (C_top * C_bottom) / 255</div>
+            </li>
+            <li><strong>معادلة دمج الشاشة (Screen Blending Formula):</strong>
+              <div class="math-formula">C_result = 255 - ((255 - C_top) * (255 - C_bottom)) / 255</div>
+            </li>
+            <li><strong>السحب والإفلات وإعادة الترتيب (Drag & Drop Z-Index):</strong> يدعم النظام إعادة ترتيب الطبقات بسحب بطاقة الطبقة رأسياً، مما يؤدي فوراً إلى إعادة حساب شجرة التصيير.</li>
+          </ul>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>بيئة الإضاءة:</strong><span>Dark Studio Slate (#0f172a / #1e293b)</span></div>
+          <div class="spec-item"><strong>عدد أنماط الدمج:</strong><span>17 نمطاً رياضياً (Normal, Multiply, Screen...)</span></div>
+          <div class="spec-item"><strong>دقة المعاينة المصغرة:</strong><span>Live Rendered Canvas Thumbnails</span></div>
+          <div class="spec-item"><strong>معمارية الذاكرة:</strong><span>TypedArray Offscreen Canvas Stack</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 3: لوحة الخصائص وأدوات الاستوديو في الوضع الليلي -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/04_dark_mode_properties_studio.png" alt="لوحة الخصائص بالوضع الليلي">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 3</span> استوديو أدوات الخصائص والفرش في الوضع الليلي المحدث
+        </div>
+        <div class="figure-desc">
+          توضح هذه اللقطة لوحة الخصائص والاستوديو الجانبية في الوضع الليلي، متضمنةً كبسولات الاستوديو السريعة الثلاث الكبرى، وخيارات ضبط معايير الفرشاة الفيزيائية، وتعيين الألوان التفاعلية.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والكبسولات المرئية في الواجهة</div>
+          <ul class="breakdown-list">
+            <li><strong>كبسولة «عزل بالذكاء الاصطناعي AI Magic»:</strong> زر بارز بلون متدرج بنفسجي يستدعي نافذة استوديو العزل العصبي ونموذج IS-Net بنقرة واحدة.</li>
+            <li><strong>كبسولة «دمج صورتين (Blend Images)»:</strong> زر استوديو سريع يتيح فتح نافذة دمج ومزج طبقتين بالاعتماد على خوارزميات المزج الرياضية وأقنعة التدرج.</li>
+            <li><strong>كبسولة «العلامة المائية (Watermark)»:</strong> زر فوري لنقل المستخدم إلى استوديو حماية الملكية الفكرية لحقن النصوص أو الشعارات المفرغة.</li>
+            <li><strong>شبكة أنماط الفرشاة السريعة (Brush Style Presets):</strong> 4 بطاقات تفاعلية تشمل:
+              <br>• <strong>فرشاة ناعمة (Soft Round):</strong> تدرج ضبابي غوسي مثالي للدمج والتظليل.
+              <br>• <strong>فرشاة صلبة (Hard Round):</strong> حواف حادة قطعية للرسم التقني وتحديد الخطوط الخارجية.
+              <br>• <strong>ريشة الخط والحبر (Calligraphy/Ink):</strong> استجابة ديناميكية لزوايا الرسم لمحاكاة أقلام الحبر التراثية.
+              <br>• <strong>مرذاذ الهواء (Airbrush/Spray):</strong> توزيع نقطي احتمالي يحاكي علب الرش الفنية ورسم الجدران.
+            </li>
+            <li><strong>منزلق حجم الفرشاة (Size Slider):</strong> تحكم مباشر بنصف قطر رأس الفرشاة من 1 إلى 200 بكسل مع دائرة معاينة حية تتسع وتضيق مع السحب.</li>
+            <li><strong>منزلق صلابة الحواف (Hardness Slider):</strong> تحديد درجة تلاشي الحواف من 0% (أقصى نعومة) إلى 100% (أقصى حدة).</li>
+            <li><strong>منزلق الشفافية والتدفق (Opacity Slider):</strong> تحديد معدل ترسيب الصبغة اللونية لكل ضربة قلم من 1% إلى 100%.</li>
+          </ul>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>الأدوات المدمجة:</strong><span>AI Magic + Image Blend + Watermark</span></div>
+          <div class="spec-item"><strong>مكتبة الفرش:</strong><span>4 أنماط فيزيائية مع تنعيم بيزيه</span></div>
+          <div class="spec-item"><strong>نطاق التحكّم:</strong><span>الحجم (1-200px) • الصلابة (0-100%)</span></div>
+          <div class="spec-item"><strong>زمن الاستجابة:</strong><span>فوري (Real-time GPU accelerated)</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 4: شريط استوديو الإبداع -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/03_hero_ribbon.png" alt="شريط استوديو الإبداع">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 4</span> شريط استوديو الإبداع الموحد (Tier 2 Hero Ribbon)
+        </div>
+        <div class="figure-desc">
+          شريط عائم شبه شفاف يقع أعلى مساحة العمل، يمثل المركز العصبي لتدفق العمل الإبداعي السريع داخل المنصة، حيث يجمع الوظائف الكبرى الأكثر استخداماً في أزرار كبسولية واضحة ومباشرة.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔘</span> تفصيل أزرار وكبسولات شريط الإبداع</div>
+          <ul class="breakdown-list">
+            <li><strong>زر «＋ تصميم جديد» (New Design):</strong> كبسولة مميزة ملونة بتدرج بارز تفتح نافذة إنشاء مشروع جديد وتحديد الأبعاد المخصصة أو اختيار المقاسات الجاهزة.</li>
+            <li><strong>زر «المكتبة الإبداعية» (Creative Library):</strong> استدعاء مستودع الأصول المتجهة وصور الستوك والملصقات القابلة للسحب والإفلات المباشر إلى الكانفاس.</li>
+            <li><strong>زر «قوالب جاهزة» (Templates):</strong> استعراض مكتبة القوالب التسويقية والاجتماعية متعددة الطبقات والجاهزة للتحرير الفوري.</li>
+            <li><strong>زر «استوديو الخلفيات» (Backdrops):</strong> تصفح خلفيات تصوير المنتجات، المنصات الرخامية (Podiums)، وتدرجات استوديوهات البورتريه.</li>
+            <li><strong>زر «المشاريع» (Projects):</strong> فتح لوحة إدارة المشاريع المحفوظة محلياً، ومزامنة النسخ الاحتياطية وسلة المهملات.</li>
+            <li><strong>زر «تصدير متعدد» (Multi-Export):</strong> توليد وتصدير كافة مقاسات منصات التواصل الاجتماعي دفعة واحدة وحفظها في أرشيف ZIP.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 5: لوحة الأوامر السريعة -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/20_command_palette.png" alt="لوحة الأوامر">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 5</span> لوحة الأوامر الفورية والبحث السريع (Command Palette - Ctrl + K)
+        </div>
+        <div class="figure-desc">
+          واجهة منبثقة فائقة السرعة تتيح للمصممين المحترفين تنفيذ أي أمر في النظام، أو تشغيل الفلاتر، أو التبديل بين الأدوات عبر لوحة المفاتيح حصراً ودون الحاجة للتنقل بالفأرة.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">⚡</span> مكونات ووظائف لوحة الأوامر</div>
+          <ul class="breakdown-list">
+            <li><strong>حقل البحث الذكي (Search Input):</strong> يدعم خوارزمية المطابقة التقريبية (Fuzzy Matching)، مما يسمح بالعثور على الأوامر حتى عند حدوث أخطاء إملائية طفيفة.</li>
+            <li><strong>التصنيف الهيكلي للنتائج:</strong> تصنيف الأوامر إلى أقسام: أدوات التصميم (Tools)، الفلاتر والمؤثرات (Filters)، النوافذ المنبثقة (Modals)، وعمليات الملف والتصدير (File Actions).</li>
+            <li><strong>عرض الاختصارات المقابلة (Keyboard Shortcuts Badge):</strong> عرض مفاتيح الاختصار بجانب كل خيار (مثل <span class="tech-pill">B</span> للفرشاة، <span class="tech-pill">Ctrl+Z</span> للتراجع، <span class="tech-pill">Ctrl+Shift+E</span> للتصدير).</li>
+            <li><strong>التنقل والتنفيذ الفوري:</strong> إمكانية التنقل بين الخيارات باستخدام سهمي لوحة المفاتيح العلوي والسفلي، والضغط على زر <span class="tech-pill">Enter</span> لتشغيل الأمر فوراً وإغلاق اللوحة تلقائياً.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل الثاني: النوافذ الإبداعية والاستوديوهات المتخصصة
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل الثاني</div>
+      <h2 class="chapter-title">النوافذ الإبداعية والاستوديوهات المتخصصة</h2>
+    </div>
+    <p style="margin-bottom: 22px; font-size: 16px;">
+      توفر المنصة مجموعة من الاستوديوهات والنوافذ المتخصصة التي تختصر على المصمم ساعات طويلة من الإعداد والتنسيق اليدوي، بدءاً من تهيئة أبعاد المشاريع وحتى الأصول الجاهزة وإدارة المشاريع المحلية.
+    </p>
+
+    <!-- الشكل 6: تصميم جديد -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/05_new_design_modal.png" alt="نافذة تصميم جديد">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 6</span> نافذة بدء التصميم والمقاسات الجاهزة وتصنيفات النشر
+        </div>
+        <div class="figure-desc">
+          واجهة مخصصة لتهيئة الأعمال الفنية الجديدة بسرعة ودقة بالاعتماد على معايير الأبعاد الدولية المعتمدة لمنصات التواصل الاجتماعي، ومقاسات المطبوعات الورقية، ودقة الشاشات الحديثة.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📋</span> تفصيل الخيارات والمقاسات المتوفرة بالنافذة</div>
+          <ul class="breakdown-list">
+            <li><strong>تبويب مقاسات السوشيال ميديا (Social Media):</strong>
+              <br>• بوست فيسبوك (<span class="tech-pill">1200 × 630 px</span>).
+              <br>• بوست انستغرام المربع (<span class="tech-pill">1080 × 1080 px</span>).
+              <br>• قصة وريلز انستغرام وتيك توك (<span class="tech-pill">1080 × 1920 px</span>).
+              <br>• صورة مصغرة ليوتيوب YouTube Thumbnail (<span class="tech-pill">1280 × 720 px</span>).
+              <br>• غلاف منصة تويتر/إكس Header (<span class="tech-pill">1500 × 500 px</span>).
+            </li>
+            <li><strong>تبويب المطبوعات والأعمال (Print & Business):</strong>
+              <br>• مستند A4 قياسي (<span class="tech-pill">2480 × 3508 px</span> بدقة 300 DPI).
+              <br>• بطاقة عمل شخصية Business Card (<span class="tech-pill">1050 × 600 px</span>).
+              <br>• ملصق إعلاني Poster A3 (<span class="tech-pill">3508 × 4960 px</span>).
+            </li>
+            <li><strong>قسم الأبعاد المخصصة (Custom Dimensions):</strong> حقول لإدخال العرض (Width) والارتفاع (Height) بالبكسل، مع زر قفل نسبة التناسب لمنع تشويه المقاسات.</li>
+            <li><strong>محدد لون الخلفية الافتراضي (Canvas Background Color):</strong> خيارات جاهزة للخلفية: شفاف (Transparent Checkerboard)، أبيض نقي، أسود استوديو، أو لون مخصص من لوحة الألوان.</li>
+            <li><strong>زر الإجراء النهائي:</strong> زر «إنشاء مساحة العمل» الذي يقوم بتهيئة الكانفاس، وتفعيل طبقة الخلفية، وضبط المساطر الذكية تلقائياً.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 7: المكتبة الإبداعية -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/06_creative_library_modal.png" alt="المكتبة الإبداعية">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 7</span> المكتبة الإبداعية الشاملة للأصول المتجهة وصور الستوك
+        </div>
+        <div class="figure-desc">
+          مستودع أصول تصميم رقمية متكامل يضم آلاف العناصر الرسومية والصور الفوتوغرافية والملصقات المصنفة بدقة، والمجهزة للإدراج المباشر في أي طبقة عبر تقنية السحب والإفلات.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📦</span> محتويات وأقسام المكتبة الإبداعية</div>
+          <ul class="breakdown-list">
+            <li><strong>قسم الرسومات المتجهة (Vector Elements):</strong> مئات الرموز والأشكال التجريدية المرسومة برمجياً بدوال <span class="tech-pill">Canvas 2D Path</span> النقية دون الحاجة لملفات صور ثقيلة، مما يضمن دقة لانهائية وسرعة فائقة.</li>
+            <li><strong>مستودع صور الستوك الفوتوغرافية (Stock Photos Hub):</strong> صور فوتوغرافية احترافية عالية الدقة مصنفة حسب المجالات (الطبيعة، التكنولوجيا، الأعمال، البورتريه، والأطعمة).</li>
+            <li><strong>الملصقات والشارات الترويجية (Stickers & Badges):</strong> شرائط الخصومات، أختام الجودة، والنجوم التقييمية الجاهزة للإعلانات التجارية.</li>
+            <li><strong>محرك السحب والإفلات الذكي (Smart Drag & Drop Hub):</strong> دعم سحب أي عنصر من النافذة وإفلاته في أي نقطة على الكانفاس ليقوم النظام فوراً بإنشاء طبقة جديدة متموضعة في نفس إحداثيات الإفلات.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 8: القوالب الجاهزة -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/07_templates_modal.png" alt="استوديو القوالب">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 8</span> استوديو القوالب الجاهزة متعددة الطبقات القابلة للتعديل
+        </div>
+        <div class="figure-desc">
+          بيئة لاستعراض واختيار القوالب التصميمية الجاهزة والمعدة بأعلى معايير الجماليات البصرية، والتي تتميز بكونها قوالب مركبة من طبقات حقيقية مستقلة يمكن تحرير نصوصها وألوانها وصورها بالكامل.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🎨</span> بنية القوالب وتدفق العمل الهيكلي</div>
+          <ul class="breakdown-list">
+            <li><strong>التصنيفات الوظيفية للقوالب:</strong> قوالب عروض التجارة الإلكترونية، إعلانات المطاعم، منشورات المنصات، وبطاقات الأعمال والمناسبات.</li>
+            <li><strong>تفكيك القالب إلى طبقات مستقلة (Layer Decomposition):</strong> عند اختيار أي قالب، لا يتم تنزيله كصورة مسطحة بل يقوم النظام ببناء شجرة طبقات كاملة في الكانفاس تشمل: طبقة الصورة الخلفية، طبقات الكتل اللونية المتجهة، طبقات النصوص القابلة للتحرير المباشر بالخطوط العربية والأجنبية، وشارات الأسعار والشعارات.</li>
+            <li><strong>مزامنة الخطوط التلقائية:</strong> تحميل خطوط القالب وتطبيقها لحظياً على النصوص دون فقدان التنسيق الجمالي.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 9: استوديو الخلفيات -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/08_backdrops_modal.png" alt="استوديو الخلفيات">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 9</span> استوديو الخلفيات لتصوير المنتجات والبورتريه والمنصات
+        </div>
+        <div class="figure-desc">
+          مكتبة متخصصة موجهة لمصممي المتاجر الإلكترونية والإعلانات التجارية، توفر خلفيات تصوير احترافية تحاكي استوديوهات التصوير الفوتوغرافي الحقيقي للمنتجات والعطور والإلكترونيات.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🖼️</span> تفصيل فئات الخلفيات في الاستوديو</div>
+          <ul class="breakdown-list">
+            <li><strong>فئة المنصات والبوديوم (3D Podiums & Pedestals):</strong> منصات رخامية دائرية ومستطيلة، منصات إسمنتية عصرية، ومنصات خشبية دافئة مع ظلال وإضاءات واقعية لعرض المنتجات فوقها.</li>
+            <li><strong>فئة إضاءة الاستوديو وتدرجات البورتريه (Studio Lighting Spots):</strong> بقع ضوئية وتدرجات فينيل سينمائية تمنح صور البورتريه فخامة وعمقاً بصرياً.</li>
+            <li><strong>فئة الطبيعة والباستيل (Nature & Pastel Backdrops):</strong> ظلال أوراق الشجر الناعمة، تدرجات الشروق والغروب الهادئة، وأسطح الرمال الذهبية.</li>
+            <li><strong>تطبيق الخلفية التلقائي:</strong> إمكانية إدراج الخلفية مباشرة أسفل عناصر التصميم المعزولة لتكوين مشهد تجاري متكامل في ثوانٍ معدودة.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 10: إدارة المشاريع -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/16_projects_dashboard.png" alt="إدارة المشاريع">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 10</span> لوحة إدارة المشاريع وسجل النسخ وسلة المهملات
+        </div>
+        <div class="figure-desc">
+          نظام محلي متكامل لإدارة المشاريع الفنية يعتمد على التخزين الهجين بين IndexedDB للبيانات الضخمة و LocalStorage للإعدادات الوصفية، مما يوفر حماية تامة لبيانات المصمم من الفقدان.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📂</span> مكونات وخصائص لوحة إدارة المشاريع</div>
+          <ul class="breakdown-list">
+            <li><strong>بطاقات المشاريع المحفوظة (Project Cards):</strong> تعرض كل بطاقة مصغراً حقيقياً للعمل الفني، اسم المشروع، تاريخ ووقت آخر تعديل، أبعاد الكانفاس، وحجم البيانات في الذاكرة.</li>
+            <li><strong>زر فتح واستئناف العمل (Open Project):</strong> إعادة تحميل كامل طبقات المشروع وإعداداته في الكانفاس واستئناف التحرير فوراً.</li>
+            <li><strong>زر تكرار المشروع (Duplicate Project):</strong> إنشاء نسخة مطابقة من المشروع لاختبار تصاميم بديلة دون التأثير على العمل الأصلي.</li>
+            <li><strong>زر النقل إلى سلة المهملات (Move to Trash):</strong> حذف آمن ينقل المشروع إلى سلة المحذوفات المؤقتة لمنع الحذف العرضي.</li>
+            <li><strong>تبويب سلة المحذوفات (Trash Hub):</strong> إمكانية استعراض المشاريع المحذوفة مع خيار «استعادة» فوري يعيد المشروع لمكانه، أو خيار «حذف نهائي» لتفريغ سعة التخزين.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل الثالث: محركات المعالجة البكسلية والرياضية
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل الثالث</div>
+      <h2 class="chapter-title">محركات المعالجة البكسلية والرياضية</h2>
+    </div>
+    <p style="margin-bottom: 22px; font-size: 16px;">
+      تم بناء وتحديث محركات المعالجة الرقمية في <strong>ImagePro Studio</strong> بالاعتماد على خوارزميات رياضية دقيقة تعمل مباشرة على مصفوفات البكسلات <span class="tech-pill">Uint8ClampedArray</span> مع تسريع حركي كامل واستجابة لحظية.
+    </p>
+
+    <!-- الشكل 11: استوديو الفلاتر (التحديث الأخير) -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/09_filters_studio.png" alt="استوديو الفلاتر بالتصميم الأخير">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 11</span> استوديو الفلاتر الـ 21 والالتفاف المكاني (التحديث الأخير المعتمد)
+        </div>
+        <div class="figure-desc">
+          لقطة حية ومباشرة من أحدث إصدار للنظام توضح استوديو الفلاتر بتصميمه الأزرق والبنفسجي المطور، حيث تُعرض بطاقات الفلاتر الـ 21 مع مصغرات المعاينة الحية ومنزلقات التحكم الدقيق في شدة ونصف قطر الفلتر.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والقطاعات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>ترويسة اللوحة (Filters Header):</strong> أيقونة المرشحات مع عنوان «استوديو الفلاتر» وزر الإغلاق وزر إعادة ضبط التأثيرات.</li>
+            <li><strong>مجموعات الفلاتر الـ 21 المصنفة:</strong>
+              <br>• <strong>فلاتر التمويه والتنعيم:</strong> التمويه الغوسي (Gaussian Blur)، التمويه الصندوقي (Box Blur)، تمويه الحركة (Motion Blur).
+              <br>• <strong>فلاتر كشف الحواف والهندسة:</strong> كاشف سوبل الأفقي والعمودي (Sobel)، كاشف كاندي متعدد المراحل (Canny Edge)، ومرشح لابلارسيان (Laplacian).
+              <br>• <strong>فلاتر التوضيح والحدة:</strong> قناع التوضيح غير الحاد (Unsharp Masking)، مرشح التمرير العالي (High Pass Sharpen).
+              <br>• <strong>فلاتر المؤثرات الفنية والتشويه:</strong> مرشح التجسيم ثلاثي الأبعاد (3D Emboss)، مرشح الرسم الزيتي (Oil Painting)، ومرشح البكسلة والفسيفساء (Pixelate Mosaic).
+            </li>
+            <li><strong>بطاقات المعاينة المصغرة الحية (Interactive Live Thumbnails):</strong> توليد مصغر مستقل لكل فلتر يعرض المعاينة المباشرة لتأثيره على صورة المشروع في الوقت الفعلي.</li>
+            <li><strong>منزلق قوة الفلتر (Intensity % Slider):</strong> تحكم مباشر في نسبة تطبيق الفلتر من 0% إلى 100%.</li>
+            <li><strong>منزلق نصف قطر النواة (Kernel Radius / Size):</strong> تعديل أبعاد مصفوفة الالتفاف (3×3 أو 5×5) لزيادة أو تقليل نطاق التأثير المكاني.</li>
+            <li><strong>زرا التطبيق والإلغاء:</strong> زر «تطبيق الفلتر» لتثبيت التأثير غير التدميري على الطبقة، وزر «إلغاء الأمر» للعودة للحالة السابقة.</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📐</span> ثانياً: الأساس الرياضي للالتفاف ثنائي الأبعاد (2D Spatial Convolution)</div>
+          <p style="font-size: 14.5px; margin-bottom: 8px;">
+            تعتمد الفلاتر على تطبيق مصفوفة نواة الالتفاف $K$ بحجم $(2k+1) \times (2k+1)$ على كل بكسل في الصورة الأصلية:
+          </p>
+          <div class="math-formula">I'(x, y) = \sum_{i=-k}^{k} \sum_{j=-k}^{k} I(x+i, y+j) \cdot K(i, j)</div>
+          <p style="font-size: 14px; margin-top: 8px;">
+            على سبيل المثال، في كاشف سوبل يتم حساب المشتقات الأفقية $G_x$ والعمودية $G_y$ ثم حساب المقدار التدرجي:
+          </p>
+          <div class="math-formula">|G| = \sqrt{G_x^2 + G_y^2}, \quad \theta = \arctan(G_y / G_x)</div>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>عدد الفلاتر:</strong><span>21 فلتراً رياضياً مدمجاً</span></div>
+          <div class="spec-item"><strong>أحجام النواة:</strong><span>3×3 و 5×5 Convolution Kernels</span></div>
+          <div class="spec-item"><strong>معالجة الحواف:</strong><span>Mirror Edge Padding (Reflection)</span></div>
+          <div class="spec-item"><strong>طريقة المعاينة:</strong><span>Live Worker-Thread Mini-Render</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 12: الألوان والهستوجرام (التحديث الأخير) -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/10_color_adjustments_histogram.png" alt="الألوان والهستوجرام بالتصميم الأخير">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 12</span> لوحة التعديلات اللونية والمدرج التكراري الحي (التحديث الأخير المعتمد)
+        </div>
+        <div class="figure-desc">
+          لقطة حية ومباشرة من أحدث إصدار توضح واجهة المعايرة الضوئية الدقيقة، يعلوها المدرج التكراري اللحظي (Dynamic Multi-Channel Histogram) الذي يوضح توزيع مستويات الإضاءة والألوان، تليه منزلقات الضبط الرياضي الدقيق.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والقطاعات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>رسم الهستوجرام اللحظي المتراكب (Live Multi-Channel Histogram):</strong>
+              <br>• يمثل المحور الأفقي مستويات الشدة الـ 256 من الظلال المطلقة ($0$ - Shadows)، والدرجات الوسطى ($128$ - Midtones)، والإضاءات العالية ($255$ - Highlights).
+              <br>• المنحنيات اللونية: منحنى القناة الحمراء (Red)، منحنى القناة الخضراء (Green)، منحنى القناة الزرقاء (Blue)، ومنحنى الإضاءة الإجمالية الرمادي (Luminance).
+              <br>• مؤشرات القطع اللوني (Clipping Indicators) لتنبيه المصمم عند حدوث احتراق في البياض أو سواد مفرط.
+            </li>
+            <li><strong>منزلق السطوع (Brightness Slider):</strong> إزاحة خطية لمستويات الإضاءة من -100 إلى +100 مع إدخال رقمي مباشر.</li>
+            <li><strong>منزلق التباين (Contrast Slider):</strong> توسيع أو تضييق المدى الديناميكي حول نقطة المركز 128 بنسبة من -100 إلى +100.</li>
+            <li><strong>منزلق التشبع اللوني (Saturation Slider):</strong> التحكم في كثافة ونقاء الألوان من الأبيض والأسود التام (-100) وحتى الإشباع الفائق (+100).</li>
+            <li><strong>منزلق درجة اللون (Hue Rotation Slider):</strong> تدوير زاوية العجلة اللونية على مدار 360 درجة في فضاء HSL من -180° إلى +180°.</li>
+            <li><strong>منزلق تصحيح جاما (Gamma Correction):</strong> تعديل منحنى الإضاءة غير الخطي من 0.2 إلى 3.0 لكشف تفاصيل الظلال دون حرق الإضاءات المرتفعة.</li>
+            <li><strong>منزلق حرارة اللون وتوازن الأبيض (Temperature):</strong> تعديل دفء الصورة بين الطيف الأزرق البارد والطيف البرتقالي الدافئ.</li>
+            <li><strong>أزرار التأثيرات السريعة:</strong> زر التحويل للأبيض والأسود (Grayscale)، زر العكس اللوني (Invert)، وزر فصل القنوات اللونية (RGB Split).</li>
+            <li><strong>زرا الإجراءات:</strong> زر «إعادة ضبط القيم الافتراضية» وزر «تطبيق التعديل على الطبقة».</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📐</span> ثانياً: المعادلات الرياضية للمعايرة الضوئية</div>
+          <p style="font-size: 14.5px; margin-bottom: 6px;"><strong>1. معادلة السطوع والتباين الخطية مع القطع (Clamping):</strong></p>
+          <div class="math-formula">C_out = \text{clamp}\left((C_in - 128) \times \alpha + 128 + \beta, 0, 255\right)</div>
+          <p style="font-size: 14.5px; margin: 8px 0 6px 0;"><strong>2. معادلة تصحيح جاما غير الخطية (Non-linear Gamma Correction):</strong></p>
+          <div class="math-formula">V_out = 255 \times \left(\frac{V_in}{255}\right)^\gamma</div>
+          <p style="font-size: 14.5px; margin: 8px 0 6px 0;"><strong>3. حساب الهستوجرام بمسح أحادي O(N):</strong></p>
+          <div class="math-formula">\text{Histogram}[c][v] = \sum_{p=0}^{N-1} [I_c(p) == v], \quad \forall c \in \{R,G,B,L\}</div>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>دقة الهستوجرام:</strong><span>256 مستوى شدة ضوئية (8-bit)</span></div>
+          <div class="spec-item"><strong>القنوات المحللة:</strong><span>Red + Green + Blue + Luminance</span></div>
+          <div class="spec-item"><strong>التعقيد الزمني:</strong><span>O(N) بدورة مسح خطية أحادية</span></div>
+          <div class="spec-item"><strong>الفضاءات المدعومة:</strong><span>RGB • HSL • Linear Intensity</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 13: الرسم والفرشاة (التحديث الأخير) -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/11_drawing_brush_engine.png" alt="الرسم والفرشاة بالتصميم الأخير">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 13</span> محرك الفرشاة التنعيمية والرسم الرقمي (التحديث الأخير المعتمد)
+        </div>
+        <div class="figure-desc">
+          لقطة حية ومباشرة من التحديث الأخير لنظام ImagePro Studio توضح واجهة محرك الفرشاة التنعيمية والرسم الرقمي، مع استعراض أنماط الفرش الأربعة، ومنزلقات الخصائص الفيزيائية، وعجلة اختيار الألوان.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والخيارات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>أنماط الفرشاة الجاهزة الأربعة (Brush Style Presets):</strong>
+              <br>• <strong>فرشاة مستديرة ناعمة (Soft Round):</strong> حواف غوسية متدرجة التلاشي للتظليل الانسيابي.
+              <br>• <strong>فرشاة مستديرة صلبة (Hard Round):</strong> حواف قاطعة بنسبة 100% للتحديد ورسم الخطوط التخطيطية.
+              <br>• <strong>ريشة الخط والحبر (Calligraphy/Ink):</strong> زوايا استجابة متغيرة لمحاكاة الخط العربي وفنون التحبير.
+              <br>• <strong>مرذاذ الهواء الفني (Airbrush/Spray):</strong> توزيع احتمالي لنقاط اللون المتناثرة بأسلوب فنون الشوارع.
+            </li>
+            <li><strong>منزلق حجم رأس الفرشاة (Brush Size):</strong> من 1 بكسل وحتى 200 بكسل مع مؤشر عددي ورسم حي لدائرة التغطية.</li>
+            <li><strong>منزلق صلابة الحواف (Hardness %):</strong> تحكم ديناميكي في نطاق التدرج اللوني عند أطراف رأس الفرشاة.</li>
+            <li><strong>منزلق الشفافية والعتامة (Opacity %):</strong> لتحديد كثافة اللون المتراكم مع كل تمريرة.</li>
+            <li><strong>منزلق التنعيم الذكي ومثبت اليد (Smoothing Stabilizer %):</strong> خوارزمية ذكية تلتقط إحداثيات حركة الفأرة وتنشئ بينها مسارات بيزيه انسيابية لإزالة أي اهتزاز يدوي.</li>
+            <li><strong>محدد الألوان السريع وعينات المشروع (Color Swatches):</strong> شبكة لونية تضم الألوان الأكثر استخداماً في التصميم مع منتقي ألوان متقدم وحقول Hex و RGB.</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📐</span> ثانياً: الأسس الخوارزمية لمحرك الرسم</div>
+          <p style="font-size: 14.5px; margin-bottom: 6px;"><strong>1. خوارزمية تنعيم نقاط المنتصف التربيعية (Bezier Midpoint Smoothing):</strong></p>
+          <div class="math-formula">M_i = \left(\frac{x_i + x_{i+1}}{2}, \frac{y_i + y_{i+1}}{2}\right), \quad B(t) = (1-t)^2 P_0 + 2(1-t)t P_1 + t^2 P_2</div>
+          <p style="font-size: 14.5px; margin: 8px 0 6px 0;"><strong>2. خوارزمية الملء الفيضاني (BFS Flood Fill):</strong></p>
+          <p style="font-size: 14px; color: #334155;">
+            تعتمد أداة الطلاء على طابور استكشاف رباعي الاتجاه (4-way FIFO queue) لمقارنة المسافة اللونية الإقليدية في فضاء RGB مع نسبة التسامح:
+          </p>
+          <div class="math-formula">\Delta E = \sqrt{(R_1 - R_2)^2 + (G_1 - G_2)^2 + (B_1 - B_2)^2} \le \text{Tolerance}</div>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>أنماط الفرش:</strong><span>4 أنماط فيزيائية متقدمة</span></div>
+          <div class="spec-item"><strong>نطاق الأحجام:</strong><span>1px إلى 200px بدقة بكسلية</span></div>
+          <div class="spec-item"><strong>خوارزمية التنعيم:</strong><span>Quadratic Bezier Interpolation</span></div>
+          <div class="spec-item"><strong>خوارزمية الملء:</strong><span>BFS Queue Memory Scan</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 14: تغيير أبعاد الصورة -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/19_resize_dialog.png" alt="تغيير الأبعاد">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 14</span> نافذة تغيير حجم وأبعاد الصورة (Resize Dialog)
+        </div>
+        <div class="figure-desc">
+          نافذة هندسية متخصصة تتيح إعادة تحجيم العمل الفني بالكامل، أو تكبير وتصغير الأبعاد بدقة بكسلية مع الحفاظ التام على النسبة التناسبية لمنع تشوه الصور.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> تفصيل حقول وخيارات نافذة التحجيم</div>
+          <ul class="breakdown-list">
+            <li><strong>حقل العرض الجديد (Width in Pixels):</strong> إدخال العرض المستهدف بالبكسل مع عرض القيمة الأصلية للمقارنة.</li>
+            <li><strong>حقل الارتفاع الجديد (Height in Pixels):</strong> إدخال الارتفاع المستهدف بالبكسل.</li>
+            <li><strong>أيقونة قفل التناسب الهندسي (Constrain Proportions):</strong> زر تفاعلي يضمن عند تفعيله تحديث الارتفاع تلقائياً عند تغيير العرض (أو العكس) بالاعتماد على النسبة الأصلية.</li>
+            <li><strong>كبسولات التحجيم المئوية السريعة:</strong> أزرار جاهزة لتصغير الحجم إلى 50% أو 75%، أو مضاعفته إلى 150% أو 200% بنقرة واحدة.</li>
+            <li><strong>محرك الاستيفاء ثنائي الخطية (Bilinear Resampling Engine):</strong> يقوم بحساب المتوسط الموزون للبكسلات الأربعة المجاورة لكل بكسل جديد لمنع ظهور التسنن (Aliasing) والحفاظ على نعومة التفاصيل.</li>
+            <li><strong>زر تأكيد تغيير الأبعاد:</strong> تنفيذ التحجيم وتحديث الكانفاس والمساطر وشريط الحالة فوراً.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل الرابع: استوديو الذكاء الاصطناعي وشبكة IS-Net
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل الرابع</div>
+      <h2 class="chapter-title">استوديو الذكاء الاصطناعي وشبكة IS-Net العصبية</h2>
+    </div>
+    <p style="margin-bottom: 22px; font-size: 16px;">
+      تم تزويد المنصة بنموذج التعلم العميق المتطور <strong>IS-Net (Dichotomous Image Segmentation)</strong> المشغل محلياً وسحابياً، والذي يقوم بفصل الأجسام بدقة متناهية تشمل أدق التفاصيل كخصلات الشعر وحواف الأقمشة دون ترك أي شوائب لونية.
+    </p>
+
+    <!-- الشكل 15: لوحة الذكاء الاصطناعي (التحديث الأخير) -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/12_ai_background_removal.png" alt="لوحة الذكاء الاصطناعي بالتصميم الأخير">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 15</span> استوديو الذكاء الاصطناعي وإعدادات العزل والتفريغ (التحديث الأخير المعتمد)
+        </div>
+        <div class="figure-desc">
+          لقطة حية ومباشرة من أحدث إصدار توضح لوحة استوديو الذكاء الاصطناعي (AI Magic Studio) بتصميمها المحدث، متضمنةً بطاقات أنماط العزل الأربعة، وخيارات تنقية الحواف، وشريط المعالجة العصبية.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🔍</span> أولاً: الأجزاء والخيارات المرئية في الصورة</div>
+          <ul class="breakdown-list">
+            <li><strong>شارة الذكاء الاصطناعي الفائقة (AI Magic Studio Badge):</strong> بطاقة مميزة تشير إلى تفعيل نموذج الشبكة العصبية العميقة IS-Net.</li>
+            <li><strong>بطاقة «عزل مفرغ نقي (Transparent PNG Cutout)»:</strong> إزالة الخلفية تماماً واستخراج العنصر كطبقة مفرغة نقية مع توليد قناع شفافية كامل (Alpha Channel).</li>
+            <li><strong>بطاقة «تمويه البورتريه السينمائي (Portrait Bokeh)»:</strong> تمويه الخلفية بنعومة وانسيابية تحاكي فتحات العدسات الاحترافية $f/1.4$ مع بقاء الجسم حاداً ونقياً بنسبة 100%.</li>
+            <li><strong>بطاقة «استبدال بلون نقي (Solid Studio Background)»:</strong> استبدال الخلفية فورياً بلون استوديو موحد (أبيض للمتاجر، أسود فخم، أو كروما خضراء).</li>
+            <li><strong>بطاقة «استبدال بصورة خلفية (Custom Backdrop Replacement)»:</strong> إدراج صورة مشهدية جديدة لتكون خلفية العنصر المعزول بنقرة واحدة.</li>
+            <li><strong>منزلق نصف قطر التمويه (Bokeh Blur Radius):</strong> تحكم دقيق في عمق الميدان من تمويه خفيف إلى عزل سينمائي كامل.</li>
+            <li><strong>خيار تحسين الحواف وإزالة الشوائب (Defringe & Anti-Color Spill):</strong> إزالة الهالات اللونية الناتجة عن انعكاس ألوان الخلفية السابقة على حواف الجسم.</li>
+            <li><strong>زر الإجراء «عزل الخلفية الآن (Process Cutout)»:</strong> تشغيل المعالجة العصبية وتحديث شريط التقدم اللحظي ثم إضافة النتيجة كطبقة مستقلة.</li>
+          </ul>
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🧠</span> ثانياً: المعمارية العصبية لنموذج IS-Net</div>
+          <p style="font-size: 14.5px; margin-bottom: 8px;">
+            يعتمد نموذج IS-Net على التجزئة الثنائية التكرارية فائقة الدقة (Dichotomous Segmentation)، حيث يدمج بين مستويات التجريد العالية (High-Level Semantics) للتفريق بين الجسم والخلفية، ومستويات الدقة المنخفضة (Low-Level Boundary Features) لترسيم الحواف الدقيقة عبر قناع ماتنج دقيق:
+          </p>
+          <div class="math-formula">I_{\text{composite}}(x,y) = \alpha(x,y) \cdot I_{\text{foreground}}(x,y) + (1 - \alpha(x,y)) \cdot I_{\text{background}}(x,y)</div>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item"><strong>الشبكة العصبية:</strong><span>IS-Net (Dichotomous Segmentation)</span></div>
+          <div class="spec-item"><strong>بيئة التشغيل:</strong><span>ONNX Runtime + WebAssembly</span></div>
+          <div class="spec-item"><strong>دقة القناع:</strong><span>8-bit Grayscale Alpha Matte</span></div>
+          <div class="spec-item"><strong>تأثير البوكيه:</strong><span>Separable Gaussian Depth Blur</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل الخامس: العلامة المائية ومحرك التصدير
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل الخامس</div>
+      <h2 class="chapter-title">استوديو العلامة المائية ومحرك التصدير متعدد المقاسات</h2>
+    </div>
+    <p style="margin-bottom: 22px; font-size: 16px;">
+      لتأمين حقوق الملكية الفكرية للمصورين، وتسريع نشر الأعمال الفنية عبر المنصات الرقمية، يوفر النظام استوديو متطور للعلامات المائية ومحرك تصدير متعدد الأبعاد ينتج حزماً مجهزة للتحميل بنقرة واحدة.
+    </p>
+
+    <!-- الشكل 16: العلامة المائية -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/17_watermark_studio.png" alt="العلامة المائية">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 16</span> استوديو العلامة المائية وحماية الحقوق الفكرية
+        </div>
+        <div class="figure-desc">
+          استوديو متقدم لحماية الصور من السرقة وإعادة النشر غير المصرح بها عبر دمج علامات نصية مخصصة أو شعارات رسومية شفافة بأنماط تموضع فردية أو تكرارية شبكية.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">🛡️</span> خيارات وأدوات استوديو العلامة المائية</div>
+          <ul class="breakdown-list">
+            <li><strong>تبويب العلامة النصية (Text Watermark):</strong> حقل لكتابة نص الحقوق، اختيار الخطوط (العربية واللاتينية)، التحكم بحجم الخط، ولون النص.</li>
+            <li><strong>تبويب الشعار الرسومي (Logo Watermark):</strong> رفع ملف الشعار بصيغة PNG شفافة مع منزلق للتحكم بنسبة التحجيم والتدوير.</li>
+            <li><strong>نمط التكرار الشبكي المائل (Diagonal Tile Pattern):</strong> تكرار العلامة مصفوفياً بزاوية 45 درجة لتغطية كامل سطح العمل الفني لمنع الاقتصاص أو إزالة الحقوق.</li>
+            <li><strong>منزلق شفافية العلامة (Opacity Slider):</strong> تحكم دقيق في نسبة الشفافية للحفاظ على جمالية الصورة دون التأثير على وضوح المحتوى.</li>
+            <li><strong>أزرار التموضع السريع (Position Grid):</strong> تحديد موقع العلامة الفردية في إحدى الزوايا الأربع أو في المنتصف بنقرة واحدة.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- الشكل 17: التصدير المتعدد -->
+    <div class="figure-card">
+      <div class="figure-preview">
+        <img src="figures/18_multisize_export.png" alt="التصدير المتعدد">
+      </div>
+      <div class="figure-details">
+        <div class="figure-caption">
+          <span>شكل 17</span> محرك التصدير متعدد المقاسات والحزم المضغوطة ZIP
+        </div>
+        <div class="figure-desc">
+          محرك إنتاجي ثوري يحل مشكلة إعادة تحجيم وتصدير التصاميم يدوياً لكل منصة من منصات التواصل الاجتماعي، حيث يقوم بقراءة العمل الفني وتوليد كافة المقاسات المطلوبة دفعة واحدة.
+        </div>
+
+        <div class="breakdown-block">
+          <div class="breakdown-block-title"><span class="icon">📦</span> ميزات محرك التصدير المجمع</div>
+          <ul class="breakdown-list">
+            <li><strong>قائمة المنصات المستهدفة:</strong> تحديد المقاسات المطلوبة عبر مربعات اختيار (Instagram Post, Instagram Story, Facebook Post, Twitter Banner, YouTube Thumbnail, LinkedIn Banner).</li>
+            <li><strong>تنسيقات الملفات المتاحة:</strong> صيغة PNG الشفافة عالية الجودة، وصيغة JPEG مع منزلق ضبط نسبة الضغط والجودة (Quality %)، وصيغة WebP الحديثة للويب.</li>
+            <li><strong>الحزم المباشر في ملف مضغوط (Instant ZIP Archive):</strong> يقوم المحرك بتوليد الملفات في الذاكرة وتجميعها داخل ملف مضغوط <span class="tech-pill">.zip</span> يحمل اسم المشروع، ويتم تنزيله فوراً بنقرة زر واحدة.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       الفصل السادس: بيئة الاختبارات وضمان الجودة البرمجية
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter">
+    <div class="chapter-header">
+      <div class="chapter-num">الفصل السادس</div>
+      <h2 class="chapter-title">بيئة الاختبارات وضمان الجودة البرمجية (70 اختباراً ناجحاً 100%)</h2>
+    </div>
+    <p style="margin-bottom: 18px; font-size: 16px;">
+      يخضع النظام لبيئة فحص صارمة مبنية على إطار <strong>Vitest 2.1</strong>، حيث تجتاز الشيفرة البرمجية <strong>70 اختبار وحدة عبر 16 ملف فحص بنسبة نجاح تامة 100%</strong> لضمان متانة كافة المحركات الرياضية والخوارزميات:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ملف الاختبار البرمجي</th>
+          <th>نطاق الفحص والتحقق الهندسي</th>
+          <th>عدد الاختبارات</th>
+          <th>الحالة والنتيجة</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>phase5-layers.test.ts</code></td><td>معمارية الطبقات، المزج، والأقنعة غير التدميرية</td><td>14</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>retouch-engine.test.ts</code></td><td>أدوات التنقيح (ختم النسخ، المعالجة، وتنعيم البشرة)</td><td>7</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>selection.test.ts</code></td><td>محرك التحديد الهندسي والعمليات المنطقية والتسامح</td><td>7</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>subject-extractor.test.ts</code></td><td>نموذج الذكاء الاصطناعي، عزل العناصر، والبوكيه</td><td>6</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>filters-engine.test.ts</code></td><td>الفلاتر الـ 21 والالتفاف المكاني ومصفوفات النواة</td><td>5</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>smart-drop-hub.test.ts</code></td><td>مركز السحب والإفلات وتوجيه الأصول للكانفاس</td><td>5</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>guides-snap-engine.test.ts</code></td><td>المساطر التفاعلية والمغنطة الذكية والمحاذاة</td><td>4</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>drawing-engine.test.ts</code></td><td>الفرشاة التنعيمية وأقواس بيزيه والملء الفيضاني BFS</td><td>3</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>color-adjustments.test.ts</code></td><td>التعديلات الضوئية والمدرج التكراري اللحظي O(N)</td><td>3</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>project-persistence.test.ts</code></td><td>حزم وتشفير ملفات المشاريع (.imagepro)</td><td>3</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>autosave-manager.test.ts</code></td><td>الحفظ التلقائي المحلي IndexedDB وسجل المشاريع</td><td>3</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>creative-backgrounds.test.ts</code></td><td>كتالوج الخلفيات الإبداعية الـ 17 فئة</td><td>2</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>product-backgrounds.test.ts</code></td><td>استوديو خلفيات المنتجات والمنصات وتصيير الكانفاس</td><td>2</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>editable-templates.test.ts</code></td><td>القوالب الجاهزة متعددة الطبقات وتفكيك العناصر</td><td>2</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>templates.test.ts</code></td><td>مقاسات التصاميم والمنصات الرقمية المعيارية</td><td>2</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr><td><code>tool-contract.test.ts</code></td><td>تكامل عقود الأدوات ومزامنة خيارات الواجهة</td><td>2</td><td><span class="badge-success">✅ ناجح 100%</span></td></tr>
+        <tr style="font-weight: 800; background: #e2e8f0;">
+          <td>المجموع الإجمالي</td>
+          <td>تغطية شاملة وموثقة لكافة محركات ووحدات النظام</td>
+          <td>70</td>
+          <td><span class="badge-success">✅ 70 / 70 بنجاح تام</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       خاتمة التقرير وخلاصة الإنجاز
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div class="chapter" style="text-align: center; background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);">
+    <h2 style="color: var(--primary-dark); font-size: 26px; margin-bottom: 14px; font-weight: 800;">خاتمة التقرير وخلاصة الإنجاز</h2>
+    <p style="max-width: 850px; margin: 0 auto 22px auto; font-size: 16.5px; color: #334155; line-height: 1.9;">
+      يقدم مشروع <strong>ImagePro Studio</strong> نموذجاً هندسياً رائداً وتطبيقاً حقيقياً لمنصة تصميم ومعالجة صور رقمية فائقة التطور تعمل داخل متصفح الويب بكفاءة تضاهي البرمجيات المكتبية الضخمة، مع دعم كامل للوضعين النهاري والليلي، واستوديوهات إبداعية متكاملة، ونموذج ذكاء اصطناعي عصبي للعزل والتمويه، وضمان جودة كامل بنسبة نجاح 100%.
+    </p>
+    <div style="font-weight: 800; color: var(--primary-dark); font-size: 16px;">
+      جامعة إب • كلية الحاسوب وتكنولوجيا المعلومات • سبتمبر 2026
+      <br>
+      إعداد المهندسين: م. سليمان العربي • م. يعقوب المهاجري • م. مالك عادل
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

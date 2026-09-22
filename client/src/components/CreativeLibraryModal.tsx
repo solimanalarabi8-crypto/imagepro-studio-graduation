@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+﻿import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Palette,
   LayoutTemplate,
@@ -220,22 +220,22 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6" onClick={onClose} dir={isAr ? "rtl" : "ltr"}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 sm:p-6" onClick={onClose} dir={isAr ? "rtl" : "ltr"}>
       <div
-        className="w-full max-w-7xl h-[92vh] flex overflow-hidden rounded-2xl bg-[#090d16] border border-slate-800 text-slate-100 shadow-2xl"
+        className="w-full max-w-7xl h-[92vh] flex overflow-hidden rounded-3xl bg-[#faf7f8] border border-[#e0f0ff] text-[#1c1917] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── 1. Left Sidebar Navigation (Matching Image 4) ── */}
-        <aside className="w-56 bg-[#0d1322] border-e border-slate-800/80 flex flex-col justify-between p-3 select-none flex-shrink-0">
+        {/* ── 1. Left Sidebar Navigation (PicsArt Pro White & Burgundy) ── */}
+        <aside className="w-56 bg-white border-e border-[#e0f0ff] flex flex-col justify-between p-3 select-none flex-shrink-0">
           <div className="space-y-4">
             {/* Brand Logo */}
             <div className="px-3 py-2 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/25">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#0057ff] via-[#0284c7] to-[#0ea5e9] flex items-center justify-center text-white font-bold shadow-md shadow-[#0057ff]/25">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-sm font-black tracking-wide text-white">ImagePro <span className="text-blue-400">Studio</span></div>
-                <div className="text-[10px] text-slate-500">Creative Platform</div>
+                <div className="text-sm font-black tracking-wide text-[#1c1917]">ImagePro <span className="text-[#0057ff]">Studio</span></div>
+                <div className="text-[10px] text-[#78716c]">Creative Platform</div>
               </div>
             </div>
 
@@ -257,10 +257,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                       setActiveSection(item.id as any);
                       setSearchQuery("");
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       isActive
-                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-600/30"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-[#131b2e]"
+                        ? "picsart-btn-burgundy"
+                        : "text-[#78716c] hover:text-[#0057ff] hover:bg-[#eff6ff]"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -268,7 +268,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                       <span>{isAr ? item.labelAr : item.labelEn}</span>
                     </div>
                     {item.count !== undefined && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-[#f5eff1] text-[#78716c]"}`}>
                         {item.count}
                       </span>
                     )}
@@ -278,26 +278,26 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
             </nav>
           </div>
 
-          {/* User Profile info matching Image 4 */}
-          <div className="pt-3 border-t border-slate-800/60 px-2 flex items-center justify-between">
+          {/* User Profile info */}
+          <div className="pt-3 border-t border-[#e0f0ff] px-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
+              <div className="w-7 h-7 rounded-full bg-[#0057ff] text-white flex items-center justify-center text-xs font-bold shadow-xs">
                 👤
               </div>
-              <span className="text-xs text-slate-300 font-medium">سليمان العربي</span>
+              <span className="text-xs text-[#1c1917] font-bold">سليمان العربي</span>
             </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+            <button onClick={onClose} className="text-[#78716c] hover:text-[#0057ff] p-1.5 rounded-full hover:bg-[#eff6ff] cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
         </aside>
 
         {/* ── 2. Main Content Area ── */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[#0b0f19]">
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#faf7f8]">
           {/* Top Search & Filter Bar */}
-          <header className="px-6 py-4 border-b border-slate-800/80 bg-[#0d1322]/90 flex items-center justify-between gap-4">
+          <header className="px-6 py-4 border-b border-[#e0f0ff] bg-white flex items-center justify-between gap-4">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#78716c] pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
@@ -311,17 +311,17 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                     ? (isAr ? "ابحث في العناصر والأشكال..." : "Search elements...")
                     : (isAr ? "ابحث في الصور..." : "Search photos...")
                 }
-                className="w-full h-10 pr-10 pl-4 rounded-xl bg-[#131b2e] border border-slate-700/60 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 transition-all"
+                className="w-full h-10 pr-10 pl-4 rounded-full bg-[#faf7f8] border border-[#e0f0ff] text-[#1c1917] placeholder-[#a8a29e] text-xs focus:outline-none focus:border-[#0057ff] transition-all"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78716c] hover:text-[#0057ff]">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-[#78716c] font-bold">
                 {activeSection === "backdrops" && `${filteredBackdrops.length} ${isAr ? "خلفية متاحة" : "backdrops"}`}
                 {activeSection === "templates" && `${filteredTemplates.length} ${isAr ? "قالب متاح" : "templates"}`}
                 {activeSection === "assets" && `${filteredAssets.length} ${isAr ? "عنصر متاح" : "elements"}`}
@@ -329,15 +329,15 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               </span>
               <button
                 onClick={onClose}
-                className="w-8 h-8 rounded-xl bg-[#131b2e] hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                className="w-8 h-8 rounded-full bg-[#eff6ff] hover:bg-[#fce7eb] flex items-center justify-center text-[#0057ff] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </header>
 
-          {/* Category Filter Pills (Matching Image 4 Middle Panels) */}
-          <div className="px-6 py-2.5 border-b border-slate-800/60 bg-[#0d1322]/40 flex items-center gap-2 overflow-x-auto scrollbar-none">
+          {/* Category Filter Pills (PicsArt Pill Style) */}
+          <div className="px-6 py-2.5 border-b border-[#e0f0ff] bg-white/70 flex items-center gap-2 overflow-x-auto scrollbar-none">
             {activeSection === "backdrops" && (
               <>
                 {[
@@ -354,10 +354,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   <button
                     key={cat.id}
                     onClick={() => setBgCategory(cat.id as any)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                       bgCategory === cat.id
-                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
-                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                        ? "picsart-btn-burgundy"
+                        : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                     }`}
                   >
                     {cat.nameAr}
@@ -380,10 +380,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   <button
                     key={cat.id}
                     onClick={() => setTplCategory(cat.id as any)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                       tplCategory === cat.id
-                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
-                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                        ? "picsart-btn-burgundy"
+                        : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                     }`}
                   >
                     {cat.nameAr}
@@ -405,10 +405,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   <button
                     key={cat.id}
                     onClick={() => setAssetCategory(cat.id)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                       assetCategory === cat.id
-                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
-                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                        ? "picsart-btn-burgundy"
+                        : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                     }`}
                   >
                     {cat.nameAr}
@@ -430,10 +430,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   <button
                     key={cat.id}
                     onClick={() => setPhotoCategory(cat.id as any)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                       photoCategory === cat.id
-                        ? "bg-[#2563eb] text-white shadow-md shadow-blue-500/20 font-bold"
-                        : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                        ? "picsart-btn-burgundy"
+                        : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                     }`}
                   >
                     {cat.nameAr}
@@ -443,9 +443,9 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
             )}
           </div>
 
-          {/* ── 3. Main Grid of Cards (4 Columns Matching Image 4) ── */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {/* ── Backdrops Grid (Panel 5 in Image 4) ── */}
+          {/* ── 3. Main Grid of Cards (Pure White & Burgundy) ── */}
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+            {/* ── Backdrops Grid ── */}
             {activeSection === "backdrops" && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredBackdrops.map((bg) => {
@@ -453,7 +453,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   return (
                     <div
                       key={bg.id}
-                      className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                      className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                     >
                       <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
                         <LiveThumbCanvas renderFn={bg.render} width={1600} height={900} />
@@ -465,7 +465,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                               onApplyBackground(bg);
                               onClose();
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold shadow-md transition-transform active:scale-95"
+                            className="px-4 py-1.5 rounded-full picsart-btn-burgundy text-xs font-bold shadow-md transition-transform active:scale-95 cursor-pointer"
                           >
                             {isAr ? "تطبيق فوري" : "Apply"}
                           </button>
@@ -482,7 +482,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                                 }
                               })
                             }
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                            className="p-1.5 rounded-full bg-white/20 hover:bg-white text-white hover:text-[#0057ff] transition-colors cursor-pointer"
                             title="معاينة كاملة"
                           >
                             <Eye className="w-4 h-4" />
@@ -492,8 +492,8 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                         {/* Favorite Button */}
                         <button
                           onClick={(e) => toggleFavorite(bg.id, e)}
-                          className={`absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-colors ${
-                            isFav ? "bg-amber-500 text-white" : "bg-black/40 text-slate-400 hover:text-amber-400"
+                          className={`absolute top-2 left-2 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${
+                            isFav ? "bg-[#0057ff] text-white" : "bg-black/40 text-slate-300 hover:text-[#fda4af]"
                           }`}
                         >
                           <Star className="w-3.5 h-3.5 fill-current" />
@@ -501,10 +501,10 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                       </div>
 
                       <div className="p-3">
-                        <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                        <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] transition-colors line-clamp-1">
                           {isAr ? bg.nameAr : bg.nameEn}
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                        <div className="flex items-center justify-between text-[10px] text-[#78716c] mt-1">
                           <span className="capitalize">{bg.category}</span>
                           <span className="font-mono">1920×1080</span>
                         </div>
@@ -515,7 +515,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               </div>
             )}
 
-            {/* ── Templates Grid (Panel 4 in Image 4) ── */}
+            {/* ── Templates Grid ── */}
             {activeSection === "templates" && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredTemplates.map((tpl) => {
@@ -523,7 +523,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   return (
                     <div
                       key={tpl.id}
-                      className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                      className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                     >
                       <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
                         <LiveThumbCanvas renderFn={tpl.renderPreview} width={tpl.width} height={tpl.height} />
@@ -535,7 +535,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                               onApplyTemplate(tpl);
                               onClose();
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold shadow-md transition-transform active:scale-95"
+                            className="px-4 py-1.5 rounded-full picsart-btn-burgundy text-xs font-bold shadow-md transition-transform active:scale-95 cursor-pointer"
                           >
                             {isAr ? "استخدام القالب" : "Use Template"}
                           </button>
@@ -552,7 +552,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                                 }
                               })
                             }
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                            className="p-1.5 rounded-full bg-white/20 hover:bg-white text-white hover:text-[#0057ff] transition-colors cursor-pointer"
                             title="معاينة كاملة"
                           >
                             <Eye className="w-4 h-4" />
@@ -585,7 +585,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               </div>
             )}
 
-            {/* ── Elements / Assets Grid (Panel 6 in Image 4) ── */}
+            {/* ── Elements / Assets Grid ── */}
             {activeSection === "assets" && (
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                 {filteredAssets.map((asset) => (
@@ -595,9 +595,9 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                       onAddAssetLayer(asset);
                       onClose();
                     }}
-                    className="group flex flex-col items-center justify-center p-4 rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 transition-all hover:-translate-y-1 text-center cursor-pointer"
+                    className="group flex flex-col items-center justify-center p-4 rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] transition-all hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10 text-center cursor-pointer"
                   >
-                    <div className="w-16 h-16 rounded-xl bg-slate-950/80 flex items-center justify-center overflow-hidden mb-2 group-hover:scale-110 transition-transform">
+                    <div className="w-16 h-16 rounded-xl bg-[#f5eff1] flex items-center justify-center overflow-hidden mb-2 group-hover:scale-110 transition-transform">
                       <canvas
                         ref={(canv) => {
                           if (!canv) return;
@@ -611,7 +611,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                         className="w-full h-full object-contain pointer-events-none"
                       />
                     </div>
-                    <span className="text-[11px] font-bold text-slate-200 group-hover:text-blue-400 line-clamp-1">
+                    <span className="text-[11px] font-bold text-[#1c1917] group-hover:text-[#0057ff] line-clamp-1">
                       {isAr ? asset.nameAr : asset.nameEn}
                     </span>
                   </button>
@@ -625,7 +625,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                 {filteredPhotos.map((photo) => (
                   <div
                     key={photo.id}
-                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden transition-all hover:-translate-y-1"
+                    className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                   >
                     <div className="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
                       <LiveThumbCanvas renderFn={photo.render} width={photo.width} height={photo.height} />
@@ -635,7 +635,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                             if (onApplyStockPhoto) onApplyStockPhoto(photo, false);
                             onClose();
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-bold"
+                          className="px-4 py-1.5 rounded-full picsart-btn-burgundy text-xs font-bold shadow-md cursor-pointer"
                         >
                           {isAr ? "تعيين كخلفية" : "As Background"}
                         </button>
@@ -644,17 +644,17 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                             if (onApplyStockPhoto) onApplyStockPhoto(photo, true);
                             onClose();
                           }}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs"
+                          className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white text-white hover:text-[#0057ff] text-xs font-bold transition-colors cursor-pointer"
                         >
                           {isAr ? "كطبقة" : "As Layer"}
                         </button>
                       </div>
                     </div>
                     <div className="p-3">
-                      <div className="text-xs font-bold text-slate-100 line-clamp-1">
+                      <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] line-clamp-1">
                         {isAr ? photo.nameAr : photo.nameEn}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                      <div className="text-[10px] text-[#78716c] mt-1 font-mono">
                         {photo.width}×{photo.height}
                       </div>
                     </div>
@@ -663,13 +663,13 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               </div>
             )}
 
-            {/* ── Projects Grid (Panel 7 in Image 4) ── */}
+            {/* ── Projects Grid ── */}
             {activeSection === "projects" && (
               <div className="space-y-4">
                 {projects.length === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-center">
-                    <Folder className="w-12 h-12 text-slate-600 mb-3" />
-                    <p className="text-sm text-slate-400">{isAr ? "لا توجد مشاريع محفوظة بعد" : "No saved projects yet"}</p>
+                    <Folder className="w-12 h-12 text-[#a8a29e] mb-3" />
+                    <p className="text-sm text-[#78716c] font-bold">{isAr ? "لا توجد مشاريع محفوظة بعد" : "No saved projects yet"}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -680,18 +680,18 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                           onOpenProject(String(proj.id));
                           onClose();
                         }}
-                        className="group flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                        className="group flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                       >
-                        <div className="aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+                        <div className="aspect-video w-full bg-slate-100 flex items-center justify-center overflow-hidden">
                           {proj.thumbnail ? (
                             <img src={proj.thumbnail} alt={proj.name} className="w-full h-full object-cover" />
                           ) : (
-                            <ImageIcon className="w-8 h-8 text-slate-600" />
+                            <ImageIcon className="w-8 h-8 text-[#a8a29e]" />
                           )}
                         </div>
                         <div className="p-3">
-                          <div className="text-xs font-bold text-slate-100 line-clamp-1">{proj.name}</div>
-                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                          <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] line-clamp-1">{proj.name}</div>
+                          <div className="text-[10px] text-[#78716c] mt-1 font-mono">
                             {proj.width}×{proj.height} px
                           </div>
                         </div>
@@ -707,8 +707,8 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
               <div className="space-y-4">
                 {favoriteIds.size === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-center">
-                    <Star className="w-12 h-12 text-slate-600 mb-3" />
-                    <p className="text-sm text-slate-400">{isAr ? "لم تقم بإضافة عناصر إلى المفضلة بعد" : "No favorites added yet"}</p>
+                    <Star className="w-12 h-12 text-[#a8a29e] mb-3" />
+                    <p className="text-sm text-[#78716c] font-bold">{isAr ? "لم تقم بإضافة عناصر إلى المفضلة بعد" : "No favorites added yet"}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -719,13 +719,13 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                           onApplyBackground(bg);
                           onClose();
                         }}
-                        className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                        className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                       >
                         <div className="aspect-video w-full bg-slate-950 flex items-center justify-center">
                           <LiveThumbCanvas renderFn={bg.render} width={1600} height={900} />
                         </div>
                         <div className="p-3">
-                          <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 line-clamp-1">
+                          <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] line-clamp-1">
                             {isAr ? bg.nameAr : bg.nameEn}
                           </div>
                         </div>
@@ -738,13 +738,13 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                           onApplyTemplate(tpl);
                           onClose();
                         }}
-                        className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all hover:-translate-y-1"
+                        className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                       >
                         <div className="aspect-video w-full bg-slate-950 flex items-center justify-center">
                           <LiveThumbCanvas renderFn={tpl.renderPreview} width={tpl.width} height={tpl.height} />
                         </div>
                         <div className="p-3">
-                          <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 line-clamp-1">
+                          <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] line-clamp-1">
                             {isAr ? tpl.nameAr : tpl.nameEn}
                           </div>
                         </div>
@@ -758,20 +758,20 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
         </main>
       </div>
 
-      {/* ── 4. Dedicated Full Preview Modal ── */}
+      {/* ── 4. Dedicated Full Preview Modal (PicsArt & Burgundy) ── */}
       {previewItem && (
         <Dialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)}>
-          <DialogContent className="max-w-2xl bg-[#0d1322] border border-slate-700 text-white rounded-2xl p-6" dir={isAr ? "rtl" : "ltr"}>
+          <DialogContent className="max-w-2xl bg-[#faf7f8] border border-[#e0f0ff] text-[#1c1917] rounded-3xl p-6 shadow-2xl" dir={isAr ? "rtl" : "ltr"}>
             <DialogHeader className="mb-4">
-              <DialogTitle className="text-lg font-bold flex items-center justify-between">
+              <DialogTitle className="text-lg font-bold text-[#0057ff] flex items-center justify-between">
                 <span>{previewItem.title}</span>
-                <Badge variant="outline" className="font-mono text-xs text-blue-400 border-blue-400/40">
+                <Badge variant="outline" className="font-mono text-xs text-[#0057ff] border-[#0057ff]/40 bg-[#eff6ff]">
                   {previewItem.dims}
                 </Badge>
               </DialogTitle>
             </DialogHeader>
 
-            <div className="aspect-video w-full rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center mb-5">
+            <div className="aspect-video w-full rounded-2xl bg-slate-950 border border-[#e0f0ff] overflow-hidden flex items-center justify-center mb-5">
               {previewItem.renderFn && (
                 <LiveThumbCanvas renderFn={previewItem.renderFn} width={1600} height={900} />
               )}
@@ -780,7 +780,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setPreviewItem(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300"
+                className="px-5 py-2 rounded-full bg-white hover:bg-[#eff6ff] text-xs font-bold text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff] cursor-pointer"
               >
                 {isAr ? "إغلاق" : "Close"}
               </button>
@@ -789,7 +789,7 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
                   previewItem.onApply();
                   setPreviewItem(null);
                 }}
-                className="px-6 py-2 rounded-xl bg-[#2563eb] hover:bg-blue-600 text-xs font-bold text-white shadow-lg shadow-blue-500/25"
+                className="px-6 py-2.5 picsart-btn-burgundy text-xs font-bold shadow-md cursor-pointer"
               >
                 {isAr ? "تطبيق على مساحة العمل" : "Apply to Canvas"}
               </button>
@@ -802,3 +802,4 @@ export const CreativeLibraryModal: React.FC<CreativeLibraryModalProps> = ({
 };
 
 export default CreativeLibraryModal;
+

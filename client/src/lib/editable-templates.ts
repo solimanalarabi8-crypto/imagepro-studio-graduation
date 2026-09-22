@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ImagePro Studio — Multi-Layer Editable Templates Studio
  * True layered designs (Background, Vector Shapes, Text/Headlines, Placeholders)
  */
@@ -1460,7 +1460,7 @@ export const EDITABLE_TEMPLATES: EditableTemplate[] = [
     tags: ["poster", "art", "cinema", "music", "festival", "بوستر", "فعالية"],
     layers: [
       { id: "bg", name: "الخلفية السينمائية الداكنة", kind: "background", color: "#050508" },
-      { id: "sun", name: "القرص المتوهج", kind: "shape", shapeType: "ellipse", x: 1240, y: 1500, width: 1200, height: 1200, color: "#f43f5e" },
+      { id: "sun", name: "القرص المتوهج", kind: "shape", shapeType: "ellipse", x: 1240, y: 1500, width: 1200, height: 1200, color: "#0ea5e9" },
       { id: "title", name: "عنوان العمل الفني", kind: "text", text: "NEON HORIZON", x: 1240, y: 800, fontSize: 120, color: "#ffffff", fontWeight: "bold" },
       { id: "sub", name: "الوصف", kind: "text", text: "AN AUDIO-VISUAL IMMERSIVE EXHIBITION", x: 1240, y: 980, fontSize: 40, color: "#fb7185" }
     ],
@@ -1470,7 +1470,7 @@ export const EDITABLE_TEMPLATES: EditableTemplate[] = [
 
       // Neon circle
       const sun = ctx.createRadialGradient(w / 2, h * 0.5, 10, w / 2, h * 0.5, w * 0.4);
-      sun.addColorStop(0, "#f43f5e");
+      sun.addColorStop(0, "#0ea5e9");
       sun.addColorStop(0.7, "#fb7185");
       sun.addColorStop(1, "transparent");
       ctx.fillStyle = sun;
@@ -1529,3 +1529,4 @@ export const EDITABLE_TEMPLATES: EditableTemplate[] = [
     }
   }
 ];
+

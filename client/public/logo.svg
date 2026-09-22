@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Cyan gradient for the "i" stem -->
+    <linearGradient id="ipCyanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="60%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Blue-to-Violet gradient for the "P" form -->
+    <linearGradient id="ipPurpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="25%" stop-color="#3b82f6" />
+      <stop offset="65%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+
+    <!-- Glowing star radial gradient -->
+    <radialGradient id="ipStarGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="35%" stop-color="#bae6fd" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Subtle drop shadow filter for depth -->
+    <filter id="ipGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#0ea5e9" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Graphic Group with transparent background and soft depth glow -->
+  <g filter="url(#ipGlow)">
+    <!-- The "P" Glyphic Contour with evenodd fill rule for transparent inner counter -->
+    <path
+      fill-rule="evenodd"
+      d="M 44,14
+         C 44,14 62,14 64,14
+         C 78,14 88,23 88,37
+         C 88,51 78,60 64,60
+         L 57,60
+         L 57,80.5
+         C 57,84.6 53.6,88 49.5,88
+         C 45.4,88 42,84.6 42,80.5
+         L 42,16
+         C 42,14.9 42.9,14 44,14 Z
+         M 56,26
+         L 63.5,26
+         C 70.5,26 75.5,30.5 75.5,37
+         C 75.5,43.5 70.5,48 63.5,48
+         L 56,48
+         Z"
+      fill="url(#ipPurpleGrad)"
+    />
+
+    <!-- The "i" Stem (rounded pill) -->
+    <rect
+      x="19"
+      y="38"
+      width="15"
+      height="50"
+      rx="7.5"
+      fill="url(#ipCyanGrad)"
+    />
+
+    <!-- The "i" Sparkle Dot (4-point star with radiant flares) -->
+    <circle cx="26.5" cy="20" r="13" fill="url(#ipStarGlow)" />
+    <path
+      d="M 26.5,7
+         C 26.5,15.5 28.5,18 37.5,20
+         C 28.5,22 26.5,24.5 26.5,33
+         C 26.5,24.5 24.5,22 15.5,20
+         C 24.5,18 26.5,15.5 26.5,7 Z"
+      fill="#ffffff"
+    />
+  </g>
+</svg>

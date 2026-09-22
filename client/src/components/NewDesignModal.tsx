@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+﻿import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   EDITABLE_TEMPLATES,
@@ -348,58 +348,58 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="sm:max-w-4xl w-[94vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#0b101b] border border-slate-800/90 text-slate-100 shadow-2xl p-0 gap-0 rounded-2xl"
+        className="sm:max-w-4xl w-[94vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#faf7f8] border border-[#e0f0ff] text-[#1c1917] shadow-2xl p-0 gap-0 rounded-3xl"
         dir={isAr ? "rtl" : "ltr"}
       >
-        {/* Header - Matching Image 4 Panel 3 */}
-        <DialogHeader className="px-6 py-4 border-b border-slate-800/80 bg-[#0e1524] flex flex-row items-center justify-between">
+        {/* Header - Royal Burgundy & Pure Pearl */}
+        <DialogHeader className="px-6 py-4 border-b border-[#e0f0ff] bg-white flex flex-row items-center justify-between">
           <div>
-            <DialogTitle className="text-xl font-bold text-white tracking-wide flex items-center gap-2">
+            <DialogTitle className="text-xl font-bold text-[#0057ff] tracking-wide flex items-center gap-2">
               <span>{isAr ? "تصميم جديد" : "New Design"}</span>
             </DialogTitle>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-[#78716c] mt-1">
               {isAr ? "اختر نوع التصميم الذي تريده" : "Choose the design format you want"}
             </p>
           </div>
 
-          {/* Clean Tab Pill Switcher */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#131b2e] border border-slate-700/60">
+          {/* Clean PicsArt Pill Switcher */}
+          <div className="flex items-center gap-1.5 p-1 rounded-full bg-[#f5eff1] border border-[#e0f0ff]">
             <button
               onClick={() => setActiveTab("presets")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "presets"
-                  ? "bg-[#2563eb] text-white shadow-md font-bold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "picsart-btn-burgundy"
+                  : "text-[#78716c] hover:text-[#0057ff] hover:bg-white/80"
               }`}
             >
               {isAr ? "المقاسات الجاهزة" : "Presets"}
             </button>
             <button
               onClick={() => setActiveTab("templates")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "templates"
-                  ? "bg-[#2563eb] text-white shadow-md font-bold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "picsart-btn-burgundy"
+                  : "text-[#78716c] hover:text-[#0057ff] hover:bg-white/80"
               }`}
             >
               {isAr ? "قوالب كانفا" : "Templates"}
             </button>
             <button
               onClick={() => setActiveTab("backdrops")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "backdrops"
-                  ? "bg-[#2563eb] text-white shadow-md font-bold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "picsart-btn-burgundy"
+                  : "text-[#78716c] hover:text-[#0057ff] hover:bg-white/80"
               }`}
             >
               {isAr ? "استوديو الخلفيات" : "Backdrops"}
             </button>
             <button
               onClick={() => setActiveTab("custom")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "custom"
-                  ? "bg-[#2563eb] text-white shadow-md font-bold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "picsart-btn-burgundy"
+                  : "text-[#78716c] hover:text-[#0057ff] hover:bg-white/80"
               }`}
             >
               {isAr ? "أبعاد مخصصة" : "Custom"}
@@ -409,7 +409,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
 
         {/* Content Section */}
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-          {/* ── TAB 1: 8 Standard Presets Cards (Exactly Image 4 Panel 3) ── */}
+          {/* ── TAB 1: 8 Standard Presets Cards (PicsArt Squircle Cards) ── */}
           {activeTab === "presets" && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -417,29 +417,29 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                   <button
                     key={preset.id}
                     onClick={() => handleSelectPreset(preset)}
-                    className="group flex flex-col items-center justify-center p-5 rounded-2xl bg-[#131b2e] hover:bg-[#18233c] border border-slate-700/60 hover:border-blue-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10 text-center cursor-pointer"
+                    className="group flex flex-col items-center justify-center p-5 rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#0057ff]/10 text-center cursor-pointer shadow-xs"
                   >
                     <div className="mb-3 group-hover:scale-110 transition-transform duration-200">
                       {preset.icon}
                     </div>
-                    <span className="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors whitespace-nowrap">
+                    <span className="text-xs sm:text-sm font-bold text-[#1c1917] group-hover:text-[#0057ff] transition-colors whitespace-nowrap">
                       {isAr ? preset.nameAr : preset.nameEn}
                     </span>
-                    <span className="text-[11px] text-slate-400 mt-1 font-mono tracking-wide">
+                    <span className="text-[11px] text-[#78716c] mt-1 font-mono tracking-wide">
                       {preset.dimensions}
                     </span>
                   </button>
                 ))}
               </div>
 
-              {/* Bottom Action: "فتح مشروع موجود" with folder icon - exactly Image 4 Panel 3 */}
+              {/* Bottom Action: PicsArt Burgundy Pill Button */}
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-3.5 px-4 rounded-xl bg-[#131b2e] hover:bg-[#19243d] text-slate-200 border border-slate-700/60 hover:border-blue-500/80 flex items-center justify-center gap-2.5 font-bold text-sm transition-all duration-200 shadow-md group cursor-pointer"
+                  className="w-full py-3.5 px-4 picsart-btn-burgundy flex items-center justify-center gap-2.5 font-bold text-sm transition-all duration-200 shadow-md group cursor-pointer"
                 >
-                  <FolderOpen className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <FolderOpen className="w-4 h-4 text-[#fda4af] group-hover:scale-110 transition-transform" />
                   <span>{isAr ? "فتح مشروع موجود" : "Open Existing Project"}</span>
                 </button>
                 <input
@@ -468,7 +468,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
             </div>
           )}
 
-          {/* ── TAB 2: Canva Live Templates (Image 4 Panel 4) ── */}
+          {/* ── TAB 2: Canva Live Templates (PicsArt & Burgundy) ── */}
           {activeTab === "templates" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -485,10 +485,10 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                     <button
                       key={cat.id}
                       onClick={() => setSelectedTemplateCat(cat.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                         selectedTemplateCat === cat.id
-                          ? "bg-[#2563eb] text-white shadow-md font-bold"
-                          : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                          ? "picsart-btn-burgundy"
+                          : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                       }`}
                     >
                       {isAr ? cat.nameAr : cat.nameEn}
@@ -497,13 +497,13 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                 </div>
 
                 <div className="relative w-64">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#78716c] pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={isAr ? "ابحث في القوالب..." : "Search templates..."}
-                    className="w-full h-8.5 pr-8 pl-3 rounded-lg bg-[#131b2e] border border-slate-700/70 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500"
+                    className="w-full h-9 pr-9 pl-3 rounded-full bg-white border border-[#e0f0ff] text-[#1c1917] placeholder-[#a8a29e] text-xs focus:outline-none focus:border-[#0057ff]"
                   />
                 </div>
               </div>
@@ -513,7 +513,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                   <div
                     key={tpl.id}
                     onClick={() => handleApplyTemplateDirect(tpl)}
-                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                    className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                   >
                     <CanvasLiveThumb
                       renderFn={tpl.renderPreview}
@@ -521,12 +521,12 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       height={tpl.height}
                     />
                     <div className="p-3">
-                      <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                      <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] transition-colors line-clamp-1">
                         {isAr ? tpl.nameAr : tpl.nameEn}
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                      <div className="flex items-center justify-between text-[10px] text-[#78716c] mt-1 font-mono">
                         <span>{tpl.width}×{tpl.height}</span>
-                        <span className="capitalize text-blue-400 font-sans">{tpl.category}</span>
+                        <span className="capitalize text-[#0057ff] font-bold font-sans">{tpl.category}</span>
                       </div>
                     </div>
                   </div>
@@ -535,7 +535,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
             </div>
           )}
 
-          {/* ── TAB 3: Live Studio Backdrops (Image 4 Panel 5) ── */}
+          {/* ── TAB 3: Live Studio Backdrops (PicsArt & Burgundy) ── */}
           {activeTab === "backdrops" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -550,10 +550,10 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                     <button
                       key={cat.id}
                       onClick={() => setSelectedBackdropCat(cat.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                         selectedBackdropCat === cat.id
-                          ? "bg-[#2563eb] text-white shadow-md font-bold"
-                          : "bg-[#131b2e] text-slate-400 hover:text-slate-200 border border-slate-700/50"
+                          ? "picsart-btn-burgundy"
+                          : "bg-white text-[#78716c] hover:text-[#0057ff] border border-[#e0f0ff]"
                       }`}
                     >
                       {isAr ? cat.nameAr : cat.nameEn}
@@ -562,13 +562,13 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                 </div>
 
                 <div className="relative w-64">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#78716c] pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={isAr ? "ابحث في الخلفيات..." : "Search backdrops..."}
-                    className="w-full h-8.5 pr-8 pl-3 rounded-lg bg-[#131b2e] border border-slate-700/70 text-slate-200 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500"
+                    className="w-full h-9 pr-9 pl-3 rounded-full bg-white border border-[#e0f0ff] text-[#1c1917] placeholder-[#a8a29e] text-xs focus:outline-none focus:border-[#0057ff]"
                   />
                 </div>
               </div>
@@ -578,7 +578,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                   <div
                     key={bg.id}
                     onClick={() => handleApplyBackdropDirect(bg)}
-                    className="group relative flex flex-col rounded-xl bg-[#131b2e] hover:bg-[#17223b] border border-slate-700/60 hover:border-blue-500 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10"
+                    className="group relative flex flex-col rounded-2xl bg-white hover:bg-[#eff6ff] border border-[#e0f0ff] hover:border-[#0057ff] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:shadow-[#0057ff]/10"
                   >
                     <CanvasLiveThumb
                       renderFn={bg.render}
@@ -586,12 +586,12 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       height={900}
                     />
                     <div className="p-3">
-                      <div className="text-xs font-bold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
+                      <div className="text-xs font-bold text-[#1c1917] group-hover:text-[#0057ff] transition-colors line-clamp-1">
                         {isAr ? bg.nameAr : bg.nameEn}
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                      <div className="flex items-center justify-between text-[10px] text-[#78716c] mt-1">
                         <span className="capitalize">{bg.category}</span>
-                        <span className="text-blue-400 font-bold">{isAr ? "تطبيق فوري" : "Apply"}</span>
+                        <span className="text-[#0057ff] font-bold">{isAr ? "تطبيق فوري" : "Apply"}</span>
                       </div>
                     </div>
                   </div>
@@ -605,7 +605,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
             <div className="max-w-md mx-auto space-y-5 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  <label className="text-xs font-bold text-[#1c1917] block mb-1.5">
                     {isAr ? "العرض (بكسل)" : "Width (px)"}
                   </label>
                   <input
@@ -616,13 +616,13 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       setCustomWidth(val);
                       if (lockRatio) setCustomHeight(Math.round(val / aspectRatioValue));
                     }}
-                    className="w-full h-10 px-3 rounded-lg bg-[#131b2e] border border-slate-700 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full h-10 px-3 rounded-xl bg-white border border-[#e0f0ff] text-[#1c1917] font-mono text-sm focus:outline-none focus:border-[#0057ff]"
                     min="50"
                     max="8000"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  <label className="text-xs font-bold text-[#1c1917] block mb-1.5">
                     {isAr ? "الارتفاع (بكسل)" : "Height (px)"}
                   </label>
                   <input
@@ -633,15 +633,15 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       setCustomHeight(val);
                       if (lockRatio) setCustomWidth(Math.round(val * aspectRatioValue));
                     }}
-                    className="w-full h-10 px-3 rounded-lg bg-[#131b2e] border border-slate-700 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full h-10 px-3 rounded-xl bg-white border border-[#e0f0ff] text-[#1c1917] font-mono text-sm focus:outline-none focus:border-[#0057ff]"
                     min="50"
                     max="8000"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#131b2e] border border-slate-700/60">
-                <span className="text-xs text-slate-300">
+              <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white border border-[#e0f0ff]">
+                <span className="text-xs font-semibold text-[#1c1917]">
                   {isAr ? "قفل نسبة العرض إلى الارتفاع" : "Lock Aspect Ratio"}
                 </span>
                 <button
@@ -652,14 +652,14 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       setAspectRatioValue(customWidth / customHeight);
                     }
                   }}
-                  className={`p-1.5 rounded-md ${lockRatio ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                  className={`p-1.5 rounded-lg cursor-pointer ${lockRatio ? "picsart-btn-burgundy" : "bg-[#f5eff1] text-[#78716c]"}`}
                 >
                   {lockRatio ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                <label className="text-xs font-bold text-[#1c1917] block mb-1.5">
                   {isAr ? "لون الخلفية" : "Background Color"}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -672,10 +672,10 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
                       key={bg.id}
                       type="button"
                       onClick={() => setBgChoice(bg.id as any)}
-                      className={`py-2 rounded-lg text-xs font-semibold border transition-all ${
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                         bgChoice === bg.id
-                          ? "bg-[#2563eb] text-white border-blue-400 font-bold"
-                          : "bg-[#131b2e] text-slate-400 border-slate-700/70 hover:text-white"
+                          ? "picsart-btn-burgundy"
+                          : "bg-white text-[#78716c] border-[#e0f0ff] hover:text-[#0057ff]"
                       }`}
                     >
                       {bg.label}
@@ -687,7 +687,7 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
               <button
                 type="button"
                 onClick={handleCreateCustom}
-                className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-bold shadow-lg shadow-blue-500/20 transition-all mt-2 cursor-pointer"
+                className="w-full py-3.5 picsart-btn-burgundy text-sm font-bold shadow-lg transition-all mt-2 cursor-pointer"
               >
                 {isAr ? "إنشاء الكانفاس الجديد" : "Create Canvas"}
               </button>
@@ -700,3 +700,4 @@ export const NewDesignModal: React.FC<NewDesignModalProps> = ({
 };
 
 export default NewDesignModal;
+

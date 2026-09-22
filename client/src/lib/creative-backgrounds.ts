@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ImagePro Studio — Creative Backdrops Catalog (12 High-Definition Categories)
  * Procedural & Commercial Canvas Renderers with High-Fidelity Lighting & Shadows
  */
@@ -301,7 +301,7 @@ export const CREATIVE_BACKDROPS: CreativeBackdropPreset[] = [
     nameEn: "Blushing Glow Beauty Backdrop",
     category: "beauty",
     tags: ["beauty", "cosmetics", "glow", "powder", "جمال"],
-    accentColor: "#f43f5e",
+    accentColor: "#0ea5e9",
     render: (ctx, w, h) => {
       const grad = ctx.createRadialGradient(w / 2, h * 0.4, 10, w / 2, h * 0.5, w * 0.7);
       grad.addColorStop(0, "#ffe4e6");
@@ -935,3 +935,4 @@ export const EXPANDED_BACKDROP_THEMES = [
   { id: "nature", nameAr: "طبيعة وشمس", nameEn: "Nature", icon: "🌿" },
   { id: "minimal", nameAr: "مينيمال نقي", nameEn: "Minimal", icon: "⚪" },
 ];
+

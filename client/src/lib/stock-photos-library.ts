@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ImagePro Studio — Curated Royalty-Free Stock Photos Library
  * High-fidelity procedural & vector photographic renders with zero external network dependencies
  */
@@ -585,7 +585,7 @@ export const STOCK_PHOTOS: StockPhotoItem[] = [
       const sunR = h * 0.25;
       const sunGrad = ctx.createLinearGradient(0, sunY - sunR, 0, sunY + sunR);
       sunGrad.addColorStop(0, "#fde047");
-      sunGrad.addColorStop(0.5, "#f43f5e");
+      sunGrad.addColorStop(0.5, "#0ea5e9");
       sunGrad.addColorStop(1, "#d946ef");
       ctx.fillStyle = sunGrad;
       ctx.beginPath();
@@ -664,3 +664,4 @@ export function filterStockPhotos(
   }
   return res;
 }
+
